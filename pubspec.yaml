@@ -1,0 +1,38 @@
+name: homely_app
+description: Homely — an Airbnb-like booking app for farmhouses, flats, apartments and villas.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # Supabase
+  supabase_flutter: ^2.5.6
+
+  # Env variables
+  flutter_dotenv: ^5.1.0
+
+  # UI helpers
+  google_fonts: ^6.2.1
+
+  # State management (simple, beginner friendly)
+  provider: ^6.1.2
+
+  # Date picker (for booking screen later)
+  table_calendar: ^3.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+#- assets/images/

@@ -56,6 +56,3 @@ Splash (2s) → checks if a session exists →
 - Place Detail screen (image carousel, amenities, price)
 - Then Booking screen, Profile, My Bookings
 - Tier 2: Wishlist, Search + Filters, Bottom Nav Bar
-
-Let me know once you've run this and logged in successfully, and we'll
-move on to the Home screen + seeding city/place data in Supabase.

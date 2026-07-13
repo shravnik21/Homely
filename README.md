@@ -50,9 +50,3 @@ flutter run
 Splash (2s) → checks if a session exists →
 - No session → Login screen → "Sign up" link → Signup screen → back to Home on success
 - Existing session → straight to Home screen (placeholder) with a working Logout button
-
-## Next steps (Phase 2)
-- Home screen: city selector + place cards grid (10 places × 5 cities)
-- Place Detail screen (image carousel, amenities, price)
-- Then Booking screen, Profile, My Bookings
-- Tier 2: Wishlist, Search + Filters, Bottom Nav Bar

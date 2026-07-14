@@ -19,6 +19,7 @@ dependencies:
 
   # UI helpers
   google_fonts: ^6.2.1
+  cached_network_image: ^3.4.1
 
   # State management (simple, beginner friendly)
   provider: ^6.1.2

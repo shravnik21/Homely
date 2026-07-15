@@ -3,6 +3,7 @@ import 'package:table_calendar/table_calendar.dart';
 import '../config/app_theme.dart';
 import '../models/place.dart';
 import '../services/booking_service.dart';
+import 'booking_confirmation_screen.dart';
 
 class BookingScreen extends StatefulWidget {
   final Place place;
@@ -152,7 +153,7 @@ class _BookingScreenState extends State<BookingScreen> {
   Future<void> _confirmBooking() async {
     setState(() => _isBooking = true);
     try {
-      await _bookingService.createBooking(
+      final bookingId = await _bookingService.createBooking(
         placeId: widget.place.id,
         checkIn: _checkIn!,
         checkOut: _checkOut!,
@@ -160,7 +161,7 @@ class _BookingScreenState extends State<BookingScreen> {
         totalPrice: _total,
       );
       if (!mounted) return;
-      _showSuccessDialog();
+      _showSuccessDialog(bookingId);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -174,7 +175,7 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  void _showSuccessDialog() {
+  void _showSuccessDialog(String bookingId) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -223,10 +224,26 @@ class _BookingScreenState extends State<BookingScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  // Close dialog, then pop back to Home
-                  // (past Detail and Booking screens)
+                  // Close the dialog first, then replace this booking
+                  // screen with the confirmation screen so the user
+                  // can't swipe/back into the booking form again -
+                  // "Back to Home" on that screen is now the only way
+                  // out of the flow.
                   Navigator.of(dialogContext).pop();
-                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => BookingConfirmationScreen(
+                        place: widget.place,
+                        bookingId: bookingId,
+                        checkIn: _checkIn!,
+                        checkOut: _checkOut!,
+                        guests: _guests,
+                        subtotal: _subtotal,
+                        serviceFee: _serviceFee,
+                        total: _total,
+                      ),
+                    ),
+                  );
                 },
                 child: const Text('Done'),
               ),

@@ -104,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Text(
                 'Welcome back 👋',
-                style: TextStyle(color: AppColors.grey, fontSize: 13),
+                style: TextStyle(color: Color.fromARGB(255, 240, 36, 36), fontSize: 13),
               ),
               const SizedBox(height: 2),
               Text(
@@ -125,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: AppColors.lightGrey,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.logout, color: AppColors.dark, size: 20),
+              child: const Icon(Icons.logout, color: Color.fromARGB(255, 240, 36, 36), size: 20),
             ),
           ),
         ],
@@ -143,13 +143,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: TextField(
           controller: _searchController,
-          decoration: InputDecoration(
+          decoration:const InputDecoration(
             hintText: 'Search by city, place or type...',
-            hintStyle: const TextStyle(color: AppColors.grey, fontSize: 14),
-            prefixIcon: const Icon(Icons.search, color: AppColors.grey),
+            hintStyle: TextStyle(color: AppColors.grey, fontSize: 14),
+            prefixIcon:  Icon(Icons.search, color: AppColors.grey),
             border: InputBorder.none,
             filled: false,
-            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            contentPadding:  EdgeInsets.symmetric(vertical: 14),
           ),
         ),
       ),

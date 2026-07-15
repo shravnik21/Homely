@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../config/app_theme.dart';
 import '../models/place.dart';
+import 'booking_screen.dart';
 
 class PlaceDetailScreen extends StatefulWidget {
   final Place place;
@@ -332,7 +333,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                   ),
                   const TextSpan(
                     text: ' / night',
-                    style: TextStyle(fontSize: 13, color: Color.fromARGB(255, 250, 36, 36)),
+                    style: TextStyle(fontSize: 13, color: AppColors.grey),
                   ),
                 ],
               ),
@@ -340,10 +341,9 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              // TODO: navigate to BookingScreen (Phase 3)
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Booking screen coming in Phase 3'),
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => BookingScreen(place: place),
                 ),
               );
             },

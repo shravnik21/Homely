@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../services/places_service.dart';
 import '../widgets/place_card.dart';
 import 'auth/login_screen.dart';
+import 'place_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -200,7 +201,14 @@ class _HomeScreenState extends State<HomeScreen> {
             return PlaceCard(
               place: place,
               onTap: () {
-                // TODO: navigate to PlaceDetailScreen (Phase 2 continued)
+                // Passing the Place object directly - no second DB call
+                // needed, since Home already fetched it with all images
+                // and amenities in the initial getPlaces() request.
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => PlaceDetailScreen(place: place),
+                  ),
+                );
               },
             );
           },

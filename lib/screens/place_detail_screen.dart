@@ -332,7 +332,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                   ),
                   const TextSpan(
                     text: ' / night',
-                    style: TextStyle(fontSize: 13, color: AppColors.grey),
+                    style: TextStyle(fontSize: 13, color: Color.fromARGB(255, 250, 36, 36)),
                   ),
                 ],
               ),

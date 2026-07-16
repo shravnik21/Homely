@@ -4,8 +4,8 @@ import '../models/place.dart';
 import '../services/auth_service.dart';
 import '../services/places_service.dart';
 import '../widgets/place_card.dart';
-import 'auth/login_screen.dart';
 import 'place_detail_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -68,12 +68,17 @@ class _HomeScreenState extends State<HomeScreen> {
     return name.trim().split(' ').first; // first name only
   }
 
-  Future<void> _logout() async {
-    await _authService.signOut();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
+  // Single letter shown inside the round profile button on the header.
+  String get _initial {
+    final meta = _authService.currentUser?.userMetadata;
+    final name = meta?['full_name'] as String?;
+    if (name == null || name.trim().isEmpty) return '?';
+    return name.trim()[0].toUpperCase();
+  }
+
+  void _openProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ProfileScreen()),
     );
   }
 
@@ -118,14 +123,23 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           GestureDetector(
-            onTap: _logout,
+            onTap: _openProfile,
             child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.lightGrey,
-                borderRadius: BorderRadius.circular(14),
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.primary,
               ),
-              child: const Icon(Icons.logout, color: Color.fromARGB(255, 240, 36, 36), size: 20),
+              alignment: Alignment.center,
+              child: Text(
+                _initial,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
         ],

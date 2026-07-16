@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../config/app_theme.dart';
-import '../models/place.dart';
-import 'booking_screen.dart';
+import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/models/place.dart';
+import 'package:homely_app/screens/booking_screen.dart';
 
 class PlaceDetailScreen extends StatefulWidget {
   final Place place;

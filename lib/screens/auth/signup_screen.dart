@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../config/app_theme.dart';
-import '../../services/auth_service.dart';
-import '../../widgets/custom_textfield.dart';
-import '../../widgets/primary_button.dart';
-import '../home_screen.dart';
+import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/services/auth_service.dart';
+import 'package:homely_app/widgets/custom_textfield.dart';
+import 'package:homely_app/widgets/primary_button.dart';
+import 'package:homely_app/screens/home_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
-import '../config/app_theme.dart';
-import '../models/place.dart';
-import '../services/booking_service.dart';
-import 'booking_confirmation_screen.dart';
+import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/models/place.dart';
+import 'package:homely_app/services/booking_service.dart';
+import 'package:homely_app/screens/booking_confirmation_screen.dart';
 
 class BookingScreen extends StatefulWidget {
   final Place place;

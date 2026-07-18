@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../config/app_theme.dart';
-import '../../services/auth_service.dart';
-import '../auth/login_screen.dart';
-import 'edit_profile_screen.dart';
-import 'help_support_screen.dart';
-import 'privacy_policy_screen.dart';
+import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/services/auth_service.dart';
+import 'package:homely_app/screens/auth/login_screen.dart';
+import 'package:homely_app/screens/settings/edit_profile_screen.dart';
+import 'package:homely_app/screens/settings/help_support_screen.dart';
+import 'package:homely_app/screens/settings/privacy_policy_screen.dart';
 import 'terms_of_service_screen.dart';
 
 class SettingsScreen extends StatefulWidget {

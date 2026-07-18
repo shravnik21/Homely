@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/screens/auth/login_screen.dart';
+import 'package:homely_app/screens/settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -40,9 +41,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _openSettings() {
-    // Placeholder for now - settings screen will be built later.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings coming soon')),
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
     );
   }
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../config/app_theme.dart';
-import '../models/place.dart';
+import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/models/place.dart';
 
 class PlaceCard extends StatelessWidget {
   final Place place;

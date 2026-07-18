@@ -3,6 +3,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/screens/auth/login_screen.dart';
 import 'package:homely_app/screens/settings_screen.dart';
+import 'package:homely_app/screens/my_bookings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -88,6 +89,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 32),
+            _buildMenuTile(
+              icon: Icons.luggage_outlined,
+              label: 'My Bookings',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const MyBookingsScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
             _buildMenuTile(
               icon: Icons.settings_outlined,
               label: 'Settings',

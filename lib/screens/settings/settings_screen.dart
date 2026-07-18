@@ -3,6 +3,9 @@ import '../../config/app_theme.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import 'edit_profile_screen.dart';
+import 'help_support_screen.dart';
+import 'privacy_policy_screen.dart';
+import 'terms_of_service_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -148,25 +151,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _menuTile(
               icon: Icons.privacy_tip_outlined,
               label: 'Privacy Policy',
-              onTap: () => _comingSoon('Privacy Policy'),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const PrivacyPolicyScreen()),
+                );
+              },
             ),
             const SizedBox(height: 10),
             _menuTile(
               icon: Icons.description_outlined,
               label: 'Terms of Service',
-              onTap: () => _comingSoon('Terms of Service'),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const TermsOfServiceScreen()),
+                );
+              },
             ),
             const SizedBox(height: 10),
             _menuTile(
               icon: Icons.help_outline,
               label: 'Help & Support',
-              onTap: () => _comingSoon('Help & Support'),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const HelpSupportScreen()),
+                );
+              },
             ),
             const SizedBox(height: 10),
             _menuTile(
               icon: Icons.info_outline,
               label: 'App Version',
-              trailingText: '1.0.0',
+              trailingText: '1.3.0',
               onTap: null,
             ),
 

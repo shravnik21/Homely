@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../config/supabase_config.dart';
+import 'package:homely_app/config/supabase_config.dart';
 
 /// Wraps all Supabase auth calls so UI code never talks to
 /// Supabase directly. Makes it easy to swap/extend later.

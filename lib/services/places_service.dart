@@ -1,5 +1,5 @@
-import '../config/supabase_config.dart';
-import '../models/place.dart';
+import 'package:homely_app/config/supabase_config.dart';
+import 'package:homely_app/models/place.dart';
 
 /// Same pattern as AuthService: this is the ONLY file that runs
 /// database queries for places. Screens call these methods and get

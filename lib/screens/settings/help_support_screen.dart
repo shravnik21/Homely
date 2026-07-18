@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../config/app_theme.dart';
+import 'package:homely_app/config/app_theme.dart';
 
 class _Faq {
   final String question;

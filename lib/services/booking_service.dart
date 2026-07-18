@@ -1,9 +1,29 @@
-import 'package:homely_app/config/supabase_config.dart';
+import '../config/supabase_config.dart';
+import '../models/booking.dart';
 
 /// Same service-layer pattern as AuthService/PlacesService - screens
 /// never talk to Supabase directly, they call this instead.
 class BookingService {
   final _client = SupabaseConfig.client;
+
+  /// Fetches the logged-in user's bookings, each joined with its
+  /// place's title, address, city, and cover image - one network
+  /// round trip, same nested-select technique as PlacesService.
+  Future<List<Booking>> getUserBookings() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return [];
+
+    final response = await _client
+        .from('bookings')
+        .select(
+            '*, places(title, address, city_id, cities(name), place_images(image_url, sort_order))')
+        .eq('user_id', userId)
+        .order('check_in', ascending: false);
+
+    return (response as List)
+        .map((row) => Booking.fromMap(row as Map<String, dynamic>))
+        .toList();
+  }
 
   /// Inserts the booking row and returns its generated `id`, so the
   /// caller can show a booking reference on the confirmation screen.

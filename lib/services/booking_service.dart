@@ -1,4 +1,4 @@
-import '../config/supabase_config.dart';
+import 'package:homely_app/config/supabase_config.dart';
 
 /// Same service-layer pattern as AuthService/PlacesService - screens
 /// never talk to Supabase directly, they call this instead.

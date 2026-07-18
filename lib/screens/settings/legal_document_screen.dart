@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../config/app_theme.dart';
+import 'package:homely_app/config/app_theme.dart';
 
 /// A single section of a legal document: a heading followed by a body.
 class LegalSection {

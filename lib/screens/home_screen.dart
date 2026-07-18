@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../config/app_theme.dart';
-import '../models/place.dart';
-import '../services/auth_service.dart';
-import '../services/places_service.dart';
-import '../widgets/place_card.dart';
+import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/models/place.dart';
+import 'package:homely_app/services/auth_service.dart';
+import 'package:homely_app/services/places_service.dart';
+import 'package:homely_app/widgets/place_card.dart';
 import 'place_detail_screen.dart';
 import 'profile_screen.dart';
 

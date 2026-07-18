@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../config/app_theme.dart';
-import '../../services/auth_service.dart';
-import '../../widgets/custom_textfield.dart';
-import '../../widgets/primary_button.dart';
+import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/services/auth_service.dart';
+import 'package:homely_app/widgets/custom_textfield.dart';
+import 'package:homely_app/widgets/primary_button.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});

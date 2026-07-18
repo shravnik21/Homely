@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseConfig {
   static Future<void> initialize() async {
-    await dotenv.load(fileName: ".env");
+    await dotenv.load(fileName: ".env");//dotenv allows to access environment variables from env file 
 
     await Supabase.initialize(
       url: dotenv.env['SUPABASE_URL']!,

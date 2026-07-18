@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/screens/auth/login_screen.dart';
-import 'package:homely_app/screens/settings_screen.dart';
+import 'package:homely_app/screens/settings/settings_screen.dart';
 import 'package:homely_app/screens/my_bookings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {

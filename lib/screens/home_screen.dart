@@ -3,9 +3,11 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/services/places_service.dart';
+import 'package:homely_app/services/wishlist_service.dart';
 import 'package:homely_app/widgets/place_card.dart';
 import 'place_detail_screen.dart';
 import 'profile_screen.dart';
+import 'wishlist_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,6 +19,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final AuthService _authService = AuthService();
   final PlacesService _placesService = PlacesService();
+  final WishlistService _wishlistService = WishlistService();
+
+  // Which place ids are currently saved, so PlaceCard knows which
+  // hearts to render filled. Loaded once alongside the places list;
+  // toggling a heart updates this set locally (no full refetch).
+  Set<String> _wishlistedIds = {};
 
   // Holds the network call itself - a Future. We store it in state
   // (not call getPlaces() directly in build()) so it only fires ONCE
@@ -36,6 +44,52 @@ class _HomeScreenState extends State<HomeScreen> {
     // tree - this is the correct place to kick off a one-time fetch.
     _placesFuture = _placesService.getPlaces();
     _searchController.addListener(_onSearchChanged);
+    _loadWishlistedIds();
+  }
+
+  Future<void> _loadWishlistedIds() async {
+    try {
+      final ids = await _wishlistService.getWishlistedPlaceIds();
+      if (!mounted) return;
+      setState(() => _wishlistedIds = ids);
+    } catch (_) {
+      // Non-critical - the places list still works even if this
+      // fails, hearts just default to outlined/unsaved.
+    }
+  }
+
+  Future<void> _toggleWishlist(Place place) async {
+    final alreadySaved = _wishlistedIds.contains(place.id);
+
+    // Optimistic UI update - flip the heart immediately, then sync
+    // with the server. Feels instant; we roll back on failure.
+    setState(() {
+      if (alreadySaved) {
+        _wishlistedIds.remove(place.id);
+      } else {
+        _wishlistedIds.add(place.id);
+      }
+    });
+
+    try {
+      if (alreadySaved) {
+        await _wishlistService.removeFromWishlist(place.id);
+      } else {
+        await _wishlistService.addToWishlist(place.id);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (alreadySaved) {
+          _wishlistedIds.add(place.id);
+        } else {
+          _wishlistedIds.remove(place.id);
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update your wishlist.')),
+      );
+    }
   }
 
   @override
@@ -82,6 +136,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Refreshes the saved-ids set on return, in case the user removed
+  // something from inside the Wishlist screen itself.
+  void _openWishlist() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const WishlistScreen()))
+        .then((_) => _loadWishlistedIds());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -122,25 +184,48 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          GestureDetector(
-            onTap: _openProfile,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.primary,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                _initial,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+          Row(
+            children: [
+              GestureDetector(
+                onTap: _openWishlist,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.white,
+                    border: Border.all(color: AppColors.dark, width: 1.4),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.favorite_border,
+                    color: AppColors.dark,
+                    size: 20,
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: _openProfile,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.primary,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _initial,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -214,6 +299,8 @@ class _HomeScreenState extends State<HomeScreen> {
             final place = _filteredPlaces[index];
             return PlaceCard(
               place: place,
+              isWishlisted: _wishlistedIds.contains(place.id),
+              onWishlistToggle: () => _toggleWishlist(place),
               onTap: () {
                 // Passing the Place object directly - no second DB call
                 // needed, since Home already fetched it with all images

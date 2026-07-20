@@ -141,14 +141,14 @@ class PlaceCard extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.dark,
+                          color: Color.fromARGB(255, 42, 18, 18),
                         ),
                       ),
                       const Text(
                         '/night',
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.grey,
+                          color: AppColors.dark,
                         ),
                       ),
                     ],

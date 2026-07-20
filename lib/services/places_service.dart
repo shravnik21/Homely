@@ -29,7 +29,12 @@ class PlacesService {
       query = query.eq('type', type);
     }
 
-    final response = await query;
+    // Explicit order so the result is deterministic and matches the
+    // insertion order from seed_places.sql. Without this, Postgres/PostgREST
+    // gives no ordering guarantee, and any later UPDATE on a row (e.g. an
+    // edit to `type`) can shift its physical position in the table, which
+    // silently reshuffles the list on the next unordered SELECT.
+    final response = await query.order('created_at', ascending: true);
     return (response as List)
         .map((row) => Place.fromMap(row as Map<String, dynamic>))
         .toList();

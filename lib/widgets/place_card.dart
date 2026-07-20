@@ -6,8 +6,20 @@ import 'package:homely_app/models/place.dart';
 class PlaceCard extends StatelessWidget {
   final Place place;
   final VoidCallback? onTap;
+  // Both optional and independent of each other: pass isWishlisted +
+  // onWishlistToggle together to show a heart button; screens that
+  // don't care about wishlisting (or aren't logged in) can simply
+  // omit them and the card looks exactly as it did before.
+  final bool isWishlisted;
+  final VoidCallback? onWishlistToggle;
 
-  const PlaceCard({super.key, required this.place, this.onTap});
+  const PlaceCard({
+    super.key,
+    required this.place,
+    this.onTap,
+    this.isWishlisted = false,
+    this.onWishlistToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +68,7 @@ class PlaceCard extends StatelessWidget {
                   ),
                 ),
                 Positioned(
-                  top: 12,
+                  top: onWishlistToggle != null ? 54 : 12,
                   right: 12,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -75,6 +87,31 @@ class PlaceCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onWishlistToggle != null)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: onWishlistToggle,
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.dark, width: 1.4),
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          isWishlisted ? Icons.favorite : Icons.favorite_border,
+                          color: isWishlisted
+                              ? AppColors.primary
+                              : AppColors.dark,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned(
                   top: 12,
                   left: 12,

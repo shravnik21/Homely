@@ -41,7 +41,7 @@ class PlaceCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ---- Image + price badge ----
+            // ---- Image + wishlist + type badge ----
             Stack(
               children: [
                 ClipRRect(
@@ -67,26 +67,6 @@ class PlaceCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Positioned(
-                  top: onWishlistToggle != null ? 54 : 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.dark.withOpacity(0.75),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '₹${place.pricePerNight.toStringAsFixed(0)}/night',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
                 if (onWishlistToggle != null)
                   Positioned(
                     top: 12,
@@ -94,20 +74,17 @@ class PlaceCard extends StatelessWidget {
                     child: GestureDetector(
                       onTap: onWishlistToggle,
                       child: Container(
-                        width: 34,
-                        height: 34,
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
-                          color: AppColors.white,
+                          color: Colors.black.withOpacity(0.28),
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.dark, width: 1.4),
                         ),
                         alignment: Alignment.center,
                         child: Icon(
                           isWishlisted ? Icons.favorite : Icons.favorite_border,
-                          color: isWishlisted
-                              ? AppColors.primary
-                              : AppColors.dark,
-                          size: 18,
+                          color: isWishlisted ? AppColors.primary : Colors.white,
+                          size: 20,
                         ),
                       ),
                     ),
@@ -143,15 +120,38 @@ class PlaceCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    place.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.dark,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          place.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.dark,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '₹${place.pricePerNight.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.dark,
+                        ),
+                      ),
+                      const Text(
+                        '/night',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.grey,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   Row(

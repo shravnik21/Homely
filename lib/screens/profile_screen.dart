@@ -4,6 +4,7 @@ import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/screens/auth/login_screen.dart';
 import 'package:homely_app/screens/settings/settings_screen.dart';
 import 'package:homely_app/screens/settings/about_screen.dart';
+import 'package:homely_app/screens/settings/help_support_screen.dart';
 import 'package:homely_app/screens/my_bookings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -112,6 +113,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const AboutScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildMenuTile(
+              icon: Icons.help_outline,
+              label: 'Help & Support',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const HelpSupportScreen()),
                 );
               },
             ),

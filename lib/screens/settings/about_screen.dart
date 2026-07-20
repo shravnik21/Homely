@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:homely_app/config/app_theme.dart';
-import 'help_support_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_of_service_screen.dart';
 
@@ -50,17 +49,6 @@ class AboutScreen extends StatelessWidget {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            _menuTile(
-              context,
-              icon: Icons.help_outline,
-              label: 'Help & Support',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const HelpSupportScreen()),
                 );
               },
             ),

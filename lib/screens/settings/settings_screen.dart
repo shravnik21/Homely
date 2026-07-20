@@ -3,9 +3,6 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/screens/auth/login_screen.dart';
 import 'package:homely_app/screens/settings/edit_profile_screen.dart';
-import 'package:homely_app/screens/settings/help_support_screen.dart';
-import 'package:homely_app/screens/settings/privacy_policy_screen.dart';
-import 'terms_of_service_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -144,47 +141,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               label: 'Currency',
               trailingText: 'INR (₹)',
               onTap: () => _comingSoon('Currency selection'),
-            ),
-
-            const SizedBox(height: 28),
-            _sectionLabel('About'),
-            _menuTile(
-              icon: Icons.privacy_tip_outlined,
-              label: 'Privacy Policy',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => const PrivacyPolicyScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            _menuTile(
-              icon: Icons.description_outlined,
-              label: 'Terms of Service',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => const TermsOfServiceScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            _menuTile(
-              icon: Icons.help_outline,
-              label: 'Help & Support',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const HelpSupportScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            _menuTile(
-              icon: Icons.info_outline,
-              label: 'App Version',
-              trailingText: '1.3.0',
-              onTap: null,
             ),
 
             const SizedBox(height: 28),

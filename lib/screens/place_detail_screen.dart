@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/screens/booking_screen.dart';
+import 'package:homely_app/services/wishlist_service.dart';
 
 class PlaceDetailScreen extends StatefulWidget {
   final Place place;
@@ -15,7 +16,46 @@ class PlaceDetailScreen extends StatefulWidget {
 
 class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
   final PageController _pageController = PageController();
+  final WishlistService _wishlistService = WishlistService();
   int _currentImageIndex = 0;
+  bool _isWishlisted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWishlistStatus();
+  }
+
+  Future<void> _loadWishlistStatus() async {
+    try {
+      final saved = await _wishlistService.isWishlisted(widget.place.id);
+      if (!mounted) return;
+      setState(() => _isWishlisted = saved);
+    } catch (_) {
+      // Non-critical - heart just defaults to outlined/unsaved.
+    }
+  }
+
+  Future<void> _toggleWishlist() async {
+    final wasWishlisted = _isWishlisted;
+    // Optimistic UI, same pattern as HomeScreen - flip immediately,
+    // roll back if the request fails.
+    setState(() => _isWishlisted = !wasWishlisted);
+
+    try {
+      if (wasWishlisted) {
+        await _wishlistService.removeFromWishlist(widget.place.id);
+      } else {
+        await _wishlistService.addToWishlist(widget.place.id);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isWishlisted = wasWishlisted);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update your wishlist.')),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -185,10 +225,9 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
             child: SafeArea(
               bottom: false,
               child: _CircleIconButton(
-                icon: Icons.favorite_border,
-                onTap: () {
-                  // TODO: wishlist/favourites (Tier 2)
-                },
+                icon: _isWishlisted ? Icons.favorite : Icons.favorite_border,
+                iconColor: _isWishlisted ? AppColors.primary : Colors.white,
+                onTap: _toggleWishlist,
               ),
             ),
           ),
@@ -361,8 +400,13 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
 class _CircleIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
+  final Color iconColor;
 
-  const _CircleIconButton({required this.icon, required this.onTap});
+  const _CircleIconButton({
+    required this.icon,
+    required this.onTap,
+    this.iconColor = Colors.white,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -374,7 +418,7 @@ class _CircleIconButton extends StatelessWidget {
           color: Colors.black.withOpacity(0.4),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
+        child: Icon(icon, color: iconColor, size: 20),
       ),
     );
   }

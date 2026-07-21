@@ -188,19 +188,13 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               GestureDetector(
                 onTap: _openWishlist,
-                child: Container(
+                child: const SizedBox(
                   width: 44,
                   height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.white,
-                    border: Border.all(color: AppColors.dark, width: 1.4),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
+                  child: Icon(
                     Icons.favorite_border,
                     color: AppColors.dark,
-                    size: 20,
+                    size: 24,
                   ),
                 ),
               ),

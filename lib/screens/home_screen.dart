@@ -193,7 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 44,
                   child: Icon(
                     Icons.favorite_border,
-                    color: AppColors.dark,
+                    color: Color.fromARGB(255, 250, 36, 36),
                     size: 24,
                   ),
                 ),

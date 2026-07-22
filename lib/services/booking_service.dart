@@ -1,5 +1,5 @@
-import '../config/supabase_config.dart';
-import '../models/booking.dart';
+import 'package:homely_app/config/supabase_config.dart';
+import 'package:homely_app/models/booking.dart';
 
 /// Same service-layer pattern as AuthService/PlacesService - screens
 /// never talk to Supabase directly, they call this instead.

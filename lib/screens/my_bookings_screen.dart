@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../config/app_theme.dart';
-import '../models/booking.dart';
-import '../services/booking_service.dart';
+import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/models/booking.dart';
+import 'package:homely_app/services/booking_service.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});

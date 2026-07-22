@@ -1,5 +1,5 @@
-import '../config/supabase_config.dart';
-import '../models/place.dart';
+import 'package:homely_app/config/supabase_config.dart';
+import 'package:homely_app/models/place.dart';
 
 /// Same service-layer pattern as AuthService/PlacesService/BookingService -
 /// screens never talk to Supabase directly for wishlist reads/writes,

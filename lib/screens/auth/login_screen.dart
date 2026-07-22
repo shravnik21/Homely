@@ -5,6 +5,7 @@ import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
 import 'package:homely_app/screens/home_screen.dart';
+import 'package:homely_app/screens/host/host_home_screen.dart';
 import 'package:homely_app/screens/auth/signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -42,8 +43,15 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (!mounted) return;
+
+      // The role was fixed at signup time (see SignupScreen), so
+      // login just reads it back from the account and routes
+      // automatically - no manual picking needed here.
+      final isHost = _authService.currentUserRole == 'host';
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(
+          builder: (_) => isHost ? const HostHomeScreen() : const HomeScreen(),
+        ),
         (route) => false,
       );
     } on AuthException catch (e) {

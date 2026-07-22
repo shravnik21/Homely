@@ -5,6 +5,8 @@ import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
 import 'package:homely_app/screens/home_screen.dart';
+import 'package:homely_app/screens/host/host_home_screen.dart';
+import 'package:homely_app/widgets/role_toggle.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -23,6 +25,11 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  // Which kind of account is being created. Stored on the user
+  // (see AuthService.signUp) and used to decide which Home Screen
+  // to land on right after signup.
+  UserRole _selectedRole = UserRole.guest;
 
   @override
   void dispose() {
@@ -43,6 +50,7 @@ class _SignupScreenState extends State<SignupScreen> {
         fullName: _nameController.text.trim(),
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
+        role: _selectedRole.value,
       );
 
       if (!mounted) return;
@@ -57,7 +65,11 @@ class _SignupScreenState extends State<SignupScreen> {
         Navigator.of(context).pop();
       } else {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(
+            builder: (_) => _selectedRole == UserRole.host
+                ? const HostHomeScreen()
+                : const HomeScreen(),
+          ),
           (route) => false,
         );
       }
@@ -88,6 +100,13 @@ class _SignupScreenState extends State<SignupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                RoleToggle(
+                  selectedRole: _selectedRole,
+                  onChanged: (role) => setState(() => _selectedRole = role),
+                  guestLabel: 'Signup as Guest',
+                  hostLabel: 'Signup as Host',
+                ),
+                const SizedBox(height: 24),
                 const Text(
                   'Create account',
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),

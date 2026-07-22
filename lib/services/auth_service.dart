@@ -16,12 +16,21 @@ class AuthService {
     required String fullName,
     required String email,
     required String password,
+    String role = 'guest', // 'guest' or 'host'
   }) async {
     return await _client.auth.signUp(
       email: email,
       password: password,
-      data: {'full_name': fullName}, // used by the DB trigger
+      data: {'full_name': fullName, 'role': role}, // used by the DB trigger
     );
+  }
+
+  /// 'guest' or 'host', read from the signed-in user's metadata
+  /// (set during sign up). Defaults to 'guest' if missing, e.g. for
+  /// accounts created before the role toggle existed.
+  String get currentUserRole {
+    final role = currentUser?.userMetadata?['role'] as String?;
+    return role ?? 'guest';
   }
 
   Future<AuthResponse> signIn({

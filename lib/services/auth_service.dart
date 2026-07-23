@@ -21,7 +21,13 @@ class AuthService {
     return await _client.auth.signUp(
       email: email,
       password: password,
-      data: {'full_name': fullName, 'role': role}, // used by the DB trigger
+      data: {
+        'full_name': fullName,
+        'role': role,
+        // Hosts see a one-time onboarding carousel before reaching
+        // HostHomeScreen; guests don't need this flag at all.
+        'host_onboarding_completed': false,
+      },
     );
   }
 
@@ -31,6 +37,34 @@ class AuthService {
   String get currentUserRole {
     final role = currentUser?.userMetadata?['role'] as String?;
     return role ?? 'guest';
+  }
+
+  /// Whether this host has already been through the onboarding
+  /// carousel. Read from metadata (instant, no DB call) rather than
+  /// the profiles table - same efficiency pattern as currentUserRole.
+  /// Defaults to true for anyone without the flag at all (e.g.
+  /// existing guest accounts, or hosts created before this feature
+  /// existed) so nobody gets unexpectedly shown onboarding.
+  bool get hasCompletedHostOnboarding {
+    final value = currentUser?.userMetadata?['host_onboarding_completed'];
+    if (value == null) return true;
+    return value == true;
+  }
+
+  /// Marks onboarding as done in BOTH places that need to stay in
+  /// sync - same reasoning as updateProfile(): metadata for instant
+  /// reads elsewhere in the app, profiles table as the source of truth.
+  Future<void> markHostOnboardingComplete() async {
+    await _client.auth.updateUser(
+      UserAttributes(data: {'host_onboarding_completed': true}),
+    );
+
+    final userId = currentUser?.id;
+    if (userId != null) {
+      await _client
+          .from('profiles')
+          .update({'host_onboarding_completed': true}).eq('id', userId);
+    }
   }
 
   Future<AuthResponse> signIn({

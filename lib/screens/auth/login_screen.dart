@@ -6,6 +6,7 @@ import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
 import 'package:homely_app/screens/home_screen.dart';
 import 'package:homely_app/screens/host/host_home_screen.dart';
+import 'package:homely_app/screens/host/host_onboarding_screen.dart';
 import 'package:homely_app/screens/auth/signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -46,11 +47,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // The role was fixed at signup time (see SignupScreen), so
       // login just reads it back from the account and routes
-      // automatically - no manual picking needed here.
+      // automatically - no manual picking needed here. A host who
+      // hasn't been through onboarding yet (e.g. this is their first
+      // login after confirming their email) sees that first.
       final isHost = _authService.currentUserRole == 'host';
+      final needsOnboarding =
+          isHost && !_authService.hasCompletedHostOnboarding;
+
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (_) => isHost ? const HostHomeScreen() : const HomeScreen(),
+          builder: (_) => needsOnboarding
+              ? const HostOnboardingScreen()
+              : isHost
+                  ? const HostHomeScreen()
+                  : const HomeScreen(),
         ),
         (route) => false,
       );

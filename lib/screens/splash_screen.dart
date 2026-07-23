@@ -4,6 +4,7 @@ import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/screens/auth/login_screen.dart';
 import 'package:homely_app/screens/home_screen.dart';
 import 'package:homely_app/screens/host/host_home_screen.dart';
+import 'package:homely_app/screens/host/host_onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -27,14 +28,18 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final loggedIn = _authService.isLoggedIn;
     final isHost = _authService.currentUserRole == 'host';
+    final needsOnboarding =
+        loggedIn && isHost && !_authService.hasCompletedHostOnboarding;
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => !loggedIn
             ? const LoginScreen()
-            : isHost
-                ? const HostHomeScreen()
-                : const HomeScreen(),
+            : needsOnboarding
+                ? const HostOnboardingScreen()
+                : isHost
+                    ? const HostHomeScreen()
+                    : const HomeScreen(),
       ),
     );
   }

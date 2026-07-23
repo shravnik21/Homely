@@ -5,7 +5,7 @@ import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
 import 'package:homely_app/screens/home_screen.dart';
-import 'package:homely_app/screens/host/host_home_screen.dart';
+import 'package:homely_app/screens/host/host_onboarding_screen.dart';
 import 'package:homely_app/widgets/role_toggle.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -67,7 +67,7 @@ class _SignupScreenState extends State<SignupScreen> {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (_) => _selectedRole == UserRole.host
-                ? const HostHomeScreen()
+                ? const HostOnboardingScreen()
                 : const HomeScreen(),
           ),
           (route) => false,

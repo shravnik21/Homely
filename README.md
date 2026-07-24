@@ -4,12 +4,19 @@ Homely is an Airbnb-style booking app for farmhouses, villas, apartments, and ho
 
 ## Features
 
+### User Mode
+
 - **Browse listings** — search and filter places by city and property type (villa, apartment, cottage, cabin, bungalow, holiday home, beach house, farmhouse, penthouse, homestay)
 - **Place details** — photos, pricing, capacity, bedrooms/bathrooms, address, description, and amenities
 - **Authentication** — email/password sign up, sign in, sign out, and password reset via Supabase Auth
 - **User profiles** — auto-created on sign up, with name, email, phone, and avatar
 - **Bookings** — pick check-in/check-out dates, guest count, and confirm a reservation
 - **Booking confirmation** — dedicated confirmation screen after a successful booking
+
+### Host Mode
+
+- **Host Onboarding** - Guide on user mode
+- **Add Listings** - add host listings
 
 ## Tech Stack
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/auth_service.dart';
+import 'package:homely_app/services/host_service.dart';
 import 'package:homely_app/screens/host/host_profile_screen.dart';
 
 /// Landing screen for hosts, shown instead of the guest [HomeScreen]
@@ -14,6 +15,23 @@ class HostHomeScreen extends StatefulWidget {
 
 class _HostHomeScreenState extends State<HostHomeScreen> {
   final AuthService _authService = AuthService();
+  final HostService _hostService = HostService();
+
+  // Defaults to true (assume incomplete) until the real status loads,
+  // so the reminder dot doesn't briefly flash "all good" before
+  // flipping - safer default for a "needs attention" indicator.
+  bool _hasIncompleteSetup = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSetupStatus();
+  }
+
+  Future<void> _loadSetupStatus() async {
+    final incomplete = await _hostService.hasIncompleteSetup();
+    if (mounted) setState(() => _hasIncompleteSetup = incomplete);
+  }
 
   String get _displayName {
     final meta = _authService.currentUser?.userMetadata;
@@ -29,10 +47,14 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
     return name.trim()[0].toUpperCase();
   }
 
-  void _openProfile() {
-    Navigator.of(context).push(
+  void _openProfile() async {
+    await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const HostProfileScreen()),
     );
+    // Re-check after returning, in case they just completed a step
+    // (e.g. saved payout details) - so the dot disappears immediately
+    // without needing to reopen the app.
+    _loadSetupStatus();
   }
 
   void _comingSoon(String feature) {
@@ -51,6 +73,10 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
           children: [
             _buildHeader(),
             const SizedBox(height: 24),
+            if (_hasIncompleteSetup) ...[
+              _buildSetupReminderBanner(),
+              const SizedBox(height: 20),
+            ],
             _buildStatsRow(),
             const SizedBox(height: 28),
             _buildAddListingCard(),
@@ -106,25 +132,83 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
         ),
         GestureDetector(
           onTap: _openProfile,
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.primary,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              _initial,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
+              if (_hasIncompleteSetup)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.white, width: 2),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSetupReminderBanner() {
+    return GestureDetector(
+      onTap: _openProfile,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.error.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.error.withOpacity(0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: AppColors.error,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Complete verification, payout details & host agreement to start hosting.',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: AppColors.dark,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.grey, size: 18),
+          ],
+        ),
+      ),
     );
   }
 

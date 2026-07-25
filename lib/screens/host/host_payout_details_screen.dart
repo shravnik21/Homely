@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:homely_app/config/app_theme.dart';
-import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/services/host_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
@@ -16,7 +15,6 @@ class HostPayoutDetailsScreen extends StatefulWidget {
 class _HostPayoutDetailsScreenState extends State<HostPayoutDetailsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _hostService = HostService();
-  final _authService = AuthService();
 
   final _accountHolderController = TextEditingController();
   final _accountNumberController = TextEditingController();
@@ -34,7 +32,7 @@ class _HostPayoutDetailsScreenState extends State<HostPayoutDetailsScreen> {
 
   Future<void> _loadExistingDetails() async {
     try {
-      final profile = await _authService.getMyProfile();
+      final profile = await _hostService.getMyHostProfile();
       if (mounted && profile != null) {
         setState(() {
           _accountHolderController.text =

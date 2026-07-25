@@ -52,8 +52,9 @@ class AuthService {
   }
 
   /// Marks onboarding as done in BOTH places that need to stay in
-  /// sync - same reasoning as updateProfile(): metadata for instant
-  /// reads elsewhere in the app, profiles table as the source of truth.
+  /// sync - metadata for instant reads elsewhere in the app,
+  /// host_profiles table as the source of truth (this flag is
+  /// host-specific, so it lives in host_profiles, not profiles).
   Future<void> markHostOnboardingComplete() async {
     await _client.auth.updateUser(
       UserAttributes(data: {'host_onboarding_completed': true}),
@@ -61,9 +62,10 @@ class AuthService {
 
     final userId = currentUser?.id;
     if (userId != null) {
-      await _client
-          .from('profiles')
-          .update({'host_onboarding_completed': true}).eq('id', userId);
+      await _client.from('host_profiles').upsert({
+        'id': userId,
+        'host_onboarding_completed': true,
+      });
     }
   }
 

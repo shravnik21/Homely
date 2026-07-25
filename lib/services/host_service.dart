@@ -21,14 +21,23 @@ class HostService {
   /// flow end-to-end so the UI/UX is real, and just accepts any
   /// 6-digit code as "correct". Swap this out for Supabase's real
   /// phone-auth OTP flow once an SMS provider is configured.
+  ///
+  /// Writes to TWO tables deliberately: the phone NUMBER itself is
+  /// generic account data and belongs in `profiles` (shared with
+  /// guests, e.g. shown in Edit Profile); the `phone_verified` FLAG
+  /// is host-specific trust data and belongs in `host_profiles`.
   Future<void> markPhoneVerified(String phoneNumber) async {
     final userId = _userId;
     if (userId == null) throw Exception('Not logged in.');
 
     await _client.from('profiles').update({
       'phone': phoneNumber,
-      'phone_verified': true,
     }).eq('id', userId);
+
+    await _client.from('host_profiles').upsert({
+      'id': userId,
+      'phone_verified': true,
+    });
   }
 
   /// Uploads a government ID photo to Supabase Storage, under a
@@ -49,10 +58,11 @@ class HostService {
           fileOptions: const FileOptions(upsert: true),
         );
 
-    await _client.from('profiles').update({
+    await _client.from('host_profiles').upsert({
+      'id': userId,
       'id_document_url': path,
       'id_verification_status': 'pending',
-    }).eq('id', userId);
+    });
   }
 
   // ---------------- Payout details ----------------
@@ -66,13 +76,44 @@ class HostService {
     final userId = _userId;
     if (userId == null) throw Exception('Not logged in.');
 
-    await _client.from('profiles').update({
+    await _client.from('host_profiles').upsert({
+      'id': userId,
       'bank_account_holder': accountHolder,
       'bank_account_number': accountNumber,
       'bank_ifsc': ifsc,
       'upi_id': upiId,
       'payout_setup_complete': true,
-    }).eq('id', userId);
+    });
+  }
+
+  /// Reads the host's own host_profiles row - used by
+  /// HostPayoutDetailsScreen to prefill the form with previously
+  /// saved bank details (these no longer live in `profiles`, so the
+  /// generic AuthService.getMyProfile() won't have them anymore).
+  Future<Map<String, dynamic>?> getMyHostProfile() async {
+    final userId = _userId;
+    if (userId == null) return null;
+    return await _client
+        .from('host_profiles')
+        .select()
+        .eq('id', userId)
+        .maybeSingle();
+  }
+
+  /// Same as getMyHostProfile(), but also pulls the host's name and
+  /// email from `profiles` in the SAME request via Supabase's nested
+  /// select (requires the FK added in schema_host_profiles_fk.sql).
+  /// Useful anywhere you need to show "who is this host" alongside
+  /// their setup status, e.g. a future admin review screen.
+  Future<Map<String, dynamic>?> getMyHostProfileWithAccountInfo() async {
+    final userId = _userId;
+    if (userId == null) return null;
+    final row = await _client
+        .from('host_profiles')
+        .select('*, profiles(full_name, email)')
+        .eq('id', userId)
+        .maybeSingle();
+    return row;
   }
 
   // ---------------- Host agreement ----------------
@@ -81,10 +122,11 @@ class HostService {
     final userId = _userId;
     if (userId == null) throw Exception('Not logged in.');
 
-    await _client.from('profiles').update({
+    await _client.from('host_profiles').upsert({
+      'id': userId,
       'host_agreement_accepted': true,
       'host_agreement_accepted_at': DateTime.now().toIso8601String(),
-    }).eq('id', userId);
+    });
   }
 
   /// True if any of the three mandatory host setup steps (identity
@@ -113,7 +155,7 @@ class HostService {
     final userId = _userId;
     if (userId == null) return null;
     return await _client
-        .from('profiles')
+        .from('host_profiles')
         .select(
             'id_verification_status, phone_verified, payout_setup_complete, host_agreement_accepted')
         .eq('id', userId)

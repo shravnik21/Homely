@@ -170,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Welcome back 👋',
+                'Welcome back, guest!',
                 style: TextStyle(color: Color.fromARGB(255, 240, 36, 36), fontSize: 13),
               ),
               const SizedBox(height: 2),

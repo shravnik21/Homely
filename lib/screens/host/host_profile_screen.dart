@@ -6,6 +6,7 @@ import 'package:homely_app/screens/auth/login_screen.dart';
 import 'package:homely_app/screens/host/host_verify_identity_screen.dart';
 import 'package:homely_app/screens/host/host_payout_details_screen.dart';
 import 'package:homely_app/screens/host/host_agreement_screen.dart';
+import 'package:homely_app/screens/settings/edit_profile_screen.dart';
 
 /// Profile screen for hosts - mirrors the guest ProfileScreen's look
 /// (avatar, name, email) but adds the host-specific setup steps:
@@ -32,21 +33,37 @@ class _HostProfileScreenState extends State<HostProfileScreen> {
 
   Future<void> _loadStatus() async {
     try {
-      final status = await _hostService.getHostSetupStatus();
+      // ONE query gets both the host setup status AND the live
+      // name/email/phone from `profiles`, via the FK-based nested
+      // select (schema_host_profiles_fk.sql). Since this is a live
+      // reference, not a copy, any change made in Edit Profile shows
+      // up here immediately on next load - no sync code needed.
+      final status = await _hostService.getMyHostProfileWithAccountInfo();
       if (mounted) setState(() => _status = status);
     } finally {
       if (mounted) setState(() => _isLoadingStatus = false);
     }
   }
 
+  Map<String, dynamic>? get _profileInfo =>
+      _status?['profiles'] as Map<String, dynamic>?;
+
   String get _fullName {
-    final meta = _authService.currentUser?.userMetadata;
-    final name = meta?['full_name'] as String?;
+    // Falls back to session metadata only if the DB row hasn't
+    // loaded yet (e.g. very first frame) - the DB value is always
+    // preferred once available, since that's the live source of truth.
+    final name = _profileInfo?['full_name'] as String? ??
+        _authService.currentUser?.userMetadata?['full_name'] as String?;
     if (name == null || name.trim().isEmpty) return 'Host';
     return name.trim();
   }
 
-  String get _email => _authService.currentUser?.email ?? '—';
+  String get _email =>
+      _profileInfo?['email'] as String? ??
+      _authService.currentUser?.email ??
+      '—';
+
+  String? get _phone => _profileInfo?['phone'] as String?;
 
   String get _initial {
     final name = _fullName.trim();
@@ -153,7 +170,23 @@ class _HostProfileScreenState extends State<HostProfileScreen> {
                 style: const TextStyle(fontSize: 14, color: AppColors.grey),
               ),
             ),
-            const SizedBox(height: 32),
+            if (_phone != null && _phone!.trim().isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Center(
+                child: Text(
+                  _phone!,
+                  style: const TextStyle(fontSize: 13, color: AppColors.grey),
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+
+            _buildMenuTile(
+              icon: Icons.person_outline,
+              label: 'Edit Profile',
+              onTap: () => _navigateAndRefresh(const EditProfileScreen()),
+            ),
+            const SizedBox(height: 24),
 
             _sectionLabel('Host Setup'),
             if (_isLoadingStatus)

@@ -110,7 +110,7 @@ class HostService {
     if (userId == null) return null;
     final row = await _client
         .from('host_profiles')
-        .select('*, profiles(full_name, email)')
+        .select('*, profiles(full_name, email, phone)')
         .eq('id', userId)
         .maybeSingle();
     return row;

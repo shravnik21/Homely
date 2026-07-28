@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/services/host_service.dart';
+import 'package:homely_app/services/listing_service.dart';
 import 'package:homely_app/screens/host/host_profile_screen.dart';
+import 'package:homely_app/screens/host/listing_wizard_screen.dart';
+import 'package:homely_app/screens/host/my_listings_screen.dart';
+import 'package:homely_app/screens/host/listing_manage_screen.dart';
 
 /// Landing screen for hosts, shown instead of the guest [HomeScreen]
 /// after logging in / signing up with the "Host" role selected.
@@ -16,16 +22,31 @@ class HostHomeScreen extends StatefulWidget {
 class _HostHomeScreenState extends State<HostHomeScreen> {
   final AuthService _authService = AuthService();
   final HostService _hostService = HostService();
+  final ListingService _listingService = ListingService();
 
   // Defaults to true (assume incomplete) until the real status loads,
   // so the reminder dot doesn't briefly flash "all good" before
   // flipping - safer default for a "needs attention" indicator.
   bool _hasIncompleteSetup = true;
 
+  List<Place> _listings = [];
+  bool _isLoadingListings = true;
+
   @override
   void initState() {
     super.initState();
     _loadSetupStatus();
+    _loadListings();
+  }
+
+  Future<void> _loadListings() async {
+    setState(() => _isLoadingListings = true);
+    try {
+      final listings = await _listingService.getMyListings();
+      if (mounted) setState(() => _listings = listings);
+    } finally {
+      if (mounted) setState(() => _isLoadingListings = false);
+    }
   }
 
   Future<void> _loadSetupStatus() async {
@@ -63,6 +84,27 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
     );
   }
 
+  Future<void> _addListing() async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ListingWizardScreen()),
+    );
+    if (result == true) _loadListings();
+  }
+
+  Future<void> _viewAllListings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const MyListingsScreen()),
+    );
+    _loadListings();
+  }
+
+  Future<void> _manageListing(Place place) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ListingManageScreen(place: place)),
+    );
+    _loadListings();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -81,16 +123,41 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
             const SizedBox(height: 28),
             _buildAddListingCard(),
             const SizedBox(height: 28),
-            const Text(
-              'Your Listings',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.dark,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Your Listings',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.dark,
+                  ),
+                ),
+                if (_listings.isNotEmpty)
+                  GestureDetector(
+                    onTap: _viewAllListings,
+                    child: const Text(
+                      'View all',
+                      style: TextStyle(
+                          color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
-            _buildEmptyListingsState(),
+            if (_isLoadingListings)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_listings.isEmpty)
+              _buildEmptyListingsState()
+            else
+              ..._listings.take(3).map((place) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _buildListingRow(place),
+                  )),
             const SizedBox(height: 28),
             const Text(
               'Recent Bookings',
@@ -215,7 +282,8 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
   Widget _buildStatsRow() {
     return Row(
       children: [
-        Expanded(child: _buildStatCard(label: 'Listings', value: '0')),
+        Expanded(
+            child: _buildStatCard(label: 'Listings', value: '${_listings.length}')),
         const SizedBox(width: 12),
         Expanded(child: _buildStatCard(label: 'Bookings', value: '0')),
         const SizedBox(width: 12),
@@ -282,11 +350,86 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
               foregroundColor: AppColors.primary,
               minimumSize: const Size(double.infinity, 46),
             ),
-            onPressed: () => _comingSoon('Adding a listing'),
+            onPressed: _addListing,
             child: const Text('Add a Listing'),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildListingRow(Place place) {
+    return GestureDetector(
+      onTap: () => _manageListing(place),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: AppColors.lightGrey,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 52,
+                height: 52,
+                child: place.photoUrls.isEmpty
+                    ? Container(
+                        color: AppColors.white,
+                        child: const Icon(Icons.home_outlined, color: AppColors.grey, size: 20),
+                      )
+                    : CachedNetworkImage(imageUrl: place.coverImage, fit: BoxFit.cover),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    place.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.dark),
+                  ),
+                  const SizedBox(height: 3),
+                  _statusChip(place.status),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.grey, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusChip(String status) {
+    late Color color;
+    late String label;
+    switch (status) {
+      case 'published':
+        color = Colors.green;
+        label = 'Published';
+        break;
+      case 'paused':
+        color = Colors.orange;
+        label = 'Paused';
+        break;
+      default:
+        color = AppColors.grey;
+        label = 'Draft';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(label,
+          style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
     );
   }
 

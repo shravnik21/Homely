@@ -2,6 +2,7 @@
 /// This mirrors exactly what PlacesService.getPlaces() returns from Supabase.
 class Place {
   final String id;
+  final String? cityId;
   final String cityName;
   final String title;
   final String type; // villa | apartment | cottage | cabin | bungalow | holiday home | beach house | farmhouse | penthouse | homestay
@@ -13,9 +14,19 @@ class Place {
   final String description;
   final List<String> amenities;
   final List<String> photoUrls;
+  // Null for the platform's own seeded places (no owning host).
+  // Set for anything created via the host "Add a Listing" wizard.
+  final String? hostId;
+  // 'draft' | 'published' | 'paused'. Seeded places default to
+  // 'published' (see schema_host_listings.sql).
+  final String status;
+  final String? houseRules;
+  final double? latitude;
+  final double? longitude;
 
   Place({
     required this.id,
+    this.cityId,
     required this.cityName,
     required this.title,
     required this.type,
@@ -27,6 +38,11 @@ class Place {
     required this.description,
     required this.amenities,
     required this.photoUrls,
+    this.hostId,
+    this.status = 'published',
+    this.houseRules,
+    this.latitude,
+    this.longitude,
   });
 
   /// The first photo, used as the card thumbnail. Falls back to a
@@ -49,6 +65,7 @@ class Place {
 
     return Place(
       id: map['id'] as String,
+      cityId: map['city_id'] as String?,
       cityName: (map['cities']?['name'] as String?) ?? '',
       title: map['title'] as String? ?? 'Untitled place',
       type: map['type'] as String? ?? 'villa',
@@ -63,6 +80,11 @@ class Place {
           .toList(),
       photoUrls:
           imagesRaw.map((img) => img['image_url'] as String).toList(),
+      hostId: map['host_id'] as String?,
+      status: map['status'] as String? ?? 'published',
+      houseRules: map['house_rules'] as String?,
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
     );
   }
 }

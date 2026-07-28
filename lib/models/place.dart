@@ -17,6 +17,7 @@ class Place {
   // Null for the platform's own seeded places (no owning host).
   // Set for anything created via the host "Add a Listing" wizard.
   final String? hostId;
+  final String? hostName;
   // 'draft' | 'published' | 'paused'. Seeded places default to
   // 'published' (see schema_host_listings.sql).
   final String status;
@@ -39,6 +40,7 @@ class Place {
     required this.amenities,
     required this.photoUrls,
     this.hostId,
+    this.hostName,
     this.status = 'published',
     this.houseRules,
     this.latitude,
@@ -50,6 +52,14 @@ class Place {
   String get coverImage => photoUrls.isNotEmpty
       ? photoUrls.first
       : 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2';
+
+  /// Seeded demo places have no owning host (hostId/hostName are
+  /// null) - shown as "Anonymous Host" rather than leaving a blank
+  /// or crashing on a null name.
+  String get hostDisplayName {
+    if (hostName == null || hostName!.trim().isEmpty) return 'Anonymous Host';
+    return hostName!.trim();
+  }
 
   /// Builds a Place from the raw JSON map Supabase returns.
   /// Supabase's nested select (`places(*, place_images(*))`) returns
@@ -81,6 +91,7 @@ class Place {
       photoUrls:
           imagesRaw.map((img) => img['image_url'] as String).toList(),
       hostId: map['host_id'] as String?,
+      hostName: (map['host_public_info']?['full_name'] as String?),
       status: map['status'] as String? ?? 'published',
       houseRules: map['house_rules'] as String?,
       latitude: (map['latitude'] as num?)?.toDouble(),

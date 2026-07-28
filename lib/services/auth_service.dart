@@ -122,5 +122,15 @@ class AuthService {
       'full_name': fullName,
       if (phone != null) 'phone': phone,
     }).eq('id', userId);
+
+    // host_profiles keeps its OWN copy of full_name (duplicated, not
+    // just referenced), so it needs to be updated here too whenever
+    // a host edits their name - otherwise the two tables would drift
+    // out of sync with each other.
+    if (currentUserRole == 'host') {
+      await _client.from('host_profiles').update({
+        'full_name': fullName,
+      }).eq('id', userId);
+    }
   }
 }

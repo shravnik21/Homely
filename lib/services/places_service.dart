@@ -19,7 +19,12 @@ class PlacesService {
   Future<List<Place>> getPlaces({String? city, String? type}) async {
     var query = _client
         .from('places')
-        .select('*, cities(name), place_images(image_url, sort_order)');
+        .select('*, cities(name), place_images(image_url, sort_order)')
+        // Belt-and-suspenders alongside the RLS policy in
+        // schema_host_listings.sql - guests should never see a host's
+        // draft or paused listings, even if a future service-role
+        // query bypasses RLS.
+        .eq('status', 'published');
 
     if (city != null && city.isNotEmpty) {
       // filters on a nested/related table's column

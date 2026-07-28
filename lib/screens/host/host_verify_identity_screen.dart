@@ -20,14 +20,44 @@ class _HostVerifyIdentityScreenState extends State<HostVerifyIdentityScreen> {
   final _otpController = TextEditingController();
   final _picker = ImagePicker();
 
+  bool _isLoadingInitial = true;
   bool _otpSent = false;
   bool _isSendingOtp = false;
   bool _isVerifyingOtp = false;
   bool _phoneVerified = false;
+  String? _verifiedPhoneNumber;
 
   File? _pickedImage;
   bool _isUploadingId = false;
   bool _idSubmitted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingStatus();
+  }
+
+  // Without this, reopening the screen after already verifying would
+  // just show the empty form again - this checks what's already
+  // saved so the verified state actually persists across visits.
+  Future<void> _loadExistingStatus() async {
+    try {
+      final data = await _hostService.getMyHostProfileWithAccountInfo();
+      final profileInfo = data?['profiles'] as Map<String, dynamic>?;
+      if (mounted) {
+        setState(() {
+          _phoneVerified = data?['phone_verified'] == true;
+          _verifiedPhoneNumber = profileInfo?['phone'] as String?;
+          final idStatus = data?['id_verification_status'];
+          _idSubmitted = idStatus == 'pending' || idStatus == 'verified';
+        });
+      }
+    } catch (_) {
+      // Non-fatal - leaves the form visible if this fails.
+    } finally {
+      if (mounted) setState(() => _isLoadingInitial = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -64,6 +94,7 @@ class _HostVerifyIdentityScreenState extends State<HostVerifyIdentityScreen> {
       if (!mounted) return;
       setState(() {
         _phoneVerified = true;
+        _verifiedPhoneNumber = _phoneController.text.trim();
         _isVerifyingOtp = false;
       });
       _showSnack('Phone number verified');
@@ -130,7 +161,9 @@ class _HostVerifyIdentityScreenState extends State<HostVerifyIdentityScreen> {
         iconTheme: const IconThemeData(color: AppColors.dark),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: _isLoadingInitial
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -173,9 +206,34 @@ class _HostVerifyIdentityScreenState extends State<HostVerifyIdentityScreen> {
               ),
               const SizedBox(height: 14),
 
-              if (_phoneVerified)
-                _buildVerifiedBanner('Phone number verified')
-              else ...[
+              if (_phoneVerified) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.lightGrey,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.phone_outlined,
+                          size: 18, color: AppColors.dark),
+                      const SizedBox(width: 10),
+                      Text(
+                        _verifiedPhoneNumber ?? '—',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.dark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _buildVerifiedBanner('Phone number verified'),
+              ] else ...[
                 CustomTextField(
                   controller: _phoneController,
                   label: 'Phone number',

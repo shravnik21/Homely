@@ -139,6 +139,34 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                   ),
                   const SizedBox(height: 12),
                   _buildAmenitiesGrid(place),
+
+                  // Only shown if the host actually set house rules -
+                  // stays completely hidden otherwise, rather than
+                  // showing an empty/awkward section.
+                  if (place.houseRules != null &&
+                      place.houseRules!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    const Text(
+                      'House Rules',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.dark,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      place.houseRules!.trim(),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.grey,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
+                  _buildHostCard(place),
                 ],
               ),
             ),
@@ -146,6 +174,63 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
         ),
       ),
       bottomNavigationBar: _buildBookingBar(context, place),
+    );
+  }
+
+  Widget _buildHostCard(Place place) {
+    final isAnonymous = place.hostName == null || place.hostName!.trim().isEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.lightGrey,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isAnonymous ? AppColors.grey : AppColors.primary,
+            ),
+            alignment: Alignment.center,
+            child: isAnonymous
+                ? const Icon(Icons.person_outline,
+                    color: Colors.white, size: 24)
+                : Text(
+                    place.hostDisplayName[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Hosted by',
+                  style: TextStyle(fontSize: 12, color: AppColors.grey),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  place.hostDisplayName,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.dark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

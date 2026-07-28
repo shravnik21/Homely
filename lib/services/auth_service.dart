@@ -126,11 +126,17 @@ class AuthService {
     // host_profiles keeps its OWN copy of full_name (duplicated, not
     // just referenced), so it needs to be updated here too whenever
     // a host edits their name - otherwise the two tables would drift
-    // out of sync with each other.
+    // out of sync with each other. Same for host_public_info, which
+    // is what guests actually see on a listing's "Hosted by" card.
     if (currentUserRole == 'host') {
       await _client.from('host_profiles').update({
         'full_name': fullName,
       }).eq('id', userId);
+
+      await _client.from('host_public_info').upsert({
+        'id': userId,
+        'full_name': fullName,
+      });
     }
   }
 }

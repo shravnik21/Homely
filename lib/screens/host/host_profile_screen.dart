@@ -49,21 +49,39 @@ class _HostProfileScreenState extends State<HostProfileScreen> {
       _status?['profiles'] as Map<String, dynamic>?;
 
   String get _fullName {
-    // Falls back to session metadata only if the DB row hasn't
-    // loaded yet (e.g. very first frame) - the DB value is always
-    // preferred once available, since that's the live source of truth.
-    final name = _profileInfo?['full_name'] as String? ??
+    // host_profiles now has its OWN full_name column (duplicated,
+    // kept in sync by AuthService.updateProfile()) - prefer that
+    // directly over the joined `profiles` data. Metadata is only a
+    // fallback for the very first frame before the query resolves.
+    final name = _status?['full_name'] as String? ??
+        _profileInfo?['full_name'] as String? ??
         _authService.currentUser?.userMetadata?['full_name'] as String?;
     if (name == null || name.trim().isEmpty) return 'Host';
     return name.trim();
   }
 
   String get _email =>
+      _status?['email'] as String? ??
       _profileInfo?['email'] as String? ??
       _authService.currentUser?.email ??
       '—';
 
+  // Phone isn't duplicated onto host_profiles (only full_name/email
+  // are) - this still comes from the joined `profiles` data.
   String? get _phone => _profileInfo?['phone'] as String?;
+
+  // True if any of the three mandatory setup steps is still
+  // incomplete - same logic as HostService.hasIncompleteSetup(), but
+  // computed locally from the already-loaded _status to avoid a
+  // second network call.
+  bool get _isSetupIncomplete {
+    if (_status == null) return true;
+    final verified = _status?['id_verification_status'] == 'verified' ||
+        _status?['phone_verified'] == true;
+    final payoutDone = _status?['payout_setup_complete'] == true;
+    final agreementDone = _status?['host_agreement_accepted'] == true;
+    return !(verified && payoutDone && agreementDone);
+  }
 
   String get _initial {
     final name = _fullName.trim();
@@ -179,7 +197,12 @@ class _HostProfileScreenState extends State<HostProfileScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+
+            if (!_isLoadingStatus && _isSetupIncomplete) ...[
+              _buildSetupReminderBanner(),
+              const SizedBox(height: 20),
+            ],
 
             _buildMenuTile(
               icon: Icons.person_outline,
@@ -237,6 +260,41 @@ class _HostProfileScreenState extends State<HostProfileScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSetupReminderBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.error.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.error.withOpacity(0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: AppColors.error,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Complete verification, payout details & host agreement to start hosting.',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: AppColors.dark,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

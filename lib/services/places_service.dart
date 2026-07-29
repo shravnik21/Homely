@@ -35,12 +35,21 @@ class PlacesService {
       query = query.eq('type', type);
     }
 
-    // Explicit order so the result is deterministic and matches the
-    // insertion order from seed_places.sql. Without this, Postgres/PostgREST
-    // gives no ordering guarantee, and any later UPDATE on a row (e.g. an
-    // edit to `type`) can shift its physical position in the table, which
-    // silently reshuffles the list on the next unordered SELECT.
-    final response = await query.order('created_at', ascending: true);
+    // TWO-LEVEL sort, both deterministic:
+    // 1. cities.display_order - keeps every place grouped under its
+    //    city, in the fixed city sequence (Goa, Alibaug, Lonavala,
+    //    Mumbai, Pune, ...) regardless of table storage order.
+    // 2. created_at, then id - orders places WITHIN a city by when
+    //    they were added, so a newly created listing always joins
+    //    the end of its own city's group instead of appearing
+    //    anywhere else. `id` is a final tiebreaker for any rows that
+    //    share an identical created_at (e.g. the original seed data,
+    //    all inserted in one script) - guarantees a stable order
+    //    even then, immune to future UPDATEs reshuffling ties.
+    final response = await query
+        .order('display_order', ascending: true, referencedTable: 'cities')
+        .order('created_at', ascending: true)
+        .order('id', ascending: true);
     return (response as List)
         .map((row) => Place.fromMap(row as Map<String, dynamic>))
         .toList();

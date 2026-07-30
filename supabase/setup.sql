@@ -1,5 +1,5 @@
 -- ============================================================
--- FARMSTAY APP - Supabase Setup (Phase 1: Auth + Profiles)
+-- HOMESTAY APP - Supabase Setup (Phase 1: Auth + Profiles)
 -- Run this in Supabase Dashboard -> SQL Editor
 -- ============================================================
 

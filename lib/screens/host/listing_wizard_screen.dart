@@ -206,13 +206,53 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     );
   }
 
-  /// Only the property-type step has a hard requirement to save at
-  /// all (a row can't exist without one); every other step is free
-  /// to be empty so the host can genuinely save-and-exit a draft
-  /// mid-way without being blocked by validation.
+  /// Every step must have its required field(s) filled in before the
+  /// host can tap "Next" - this only gates forward navigation via
+  /// _goNext. "Save & Exit" still works from any step, empty or not,
+  /// so the host can always save-and-exit a draft mid-way.
   String? _validateStep(int step) {
-    if (step == 0 && _type == null) return 'Choose a property type to continue';
-    return null;
+    switch (step) {
+      case 0:
+        if (_type == null) return 'Please select a property type to continue';
+        return null;
+      case 1:
+        if (_cityId == null) return 'Please select a city to continue';
+        if (_addressController.text.trim().isEmpty) {
+          return 'Please enter an address to continue';
+        }
+        return null;
+      case 2:
+        if (_titleController.text.trim().isEmpty) {
+          return 'Please enter a listing title to continue';
+        }
+        if (_descriptionController.text.trim().isEmpty) {
+          return 'Please enter a description to continue';
+        }
+        return null;
+      case 3:
+        if (_photos.isEmpty) {
+          return 'Please add at least one photo to continue';
+        }
+        return null;
+      case 4:
+        if (_amenities.isEmpty) {
+          return 'Please select at least one amenity to continue';
+        }
+        return null;
+      case 5:
+        final price = num.tryParse(_priceController.text.trim());
+        if (price == null || price <= 0) {
+          return 'Please enter a valid nightly price to continue';
+        }
+        return null;
+      case 6:
+        if (_houseRulesController.text.trim().isEmpty) {
+          return 'Please enter your house rules to continue';
+        }
+        return null;
+      default:
+        return null;
+    }
   }
 
   Future<void> _persistStep(int step) async {

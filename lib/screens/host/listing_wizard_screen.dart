@@ -452,6 +452,11 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     }
   }
 
+  /// Handles drag-to-reorder from SliverReorderableList. This works
+  /// reliably because the reorderable list lives as a sliver directly
+  /// inside _stepPhotos's own CustomScrollView - a single scrollable,
+  /// not nested inside another one - so there's no competing drag
+  /// gesture to lose the arena to after the first reorder.
   void _reorderPhotos(int oldIndex, int newIndex) {
     setState(() {
       if (newIndex > oldIndex) newIndex--;
@@ -738,27 +743,35 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
 
   // ---- Step 4: Photos ----
   Widget _stepPhotos() {
-    return _sectionWrap(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Add photos',
-            style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.dark),
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Add photos',
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.dark),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Add up to ${ListingService.maxPhotos} photos. The first photo is '
+                  'your cover photo - drag to reorder. Minimum $kMinPhotosToPublish '
+                  'required to publish.',
+                  style: const TextStyle(color: AppColors.grey, fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Add up to ${ListingService.maxPhotos} photos. The first photo is '
-            'your cover photo - drag to reorder. Minimum $kMinPhotosToPublish '
-            'required to publish.',
-            style: const TextStyle(color: AppColors.grey, fontSize: 13, height: 1.4),
-          ),
-          const SizedBox(height: 16),
-          if (_photos.isNotEmpty)
-            ReorderableListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+        ),
+        if (_photos.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverReorderableList(
               itemCount: _photos.length,
               onReorder: _reorderPhotos,
               itemBuilder: (context, index) {
@@ -774,7 +787,10 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.drag_handle, color: AppColors.grey),
+                        ReorderableDragStartListener(
+                          index: index,
+                          child: const Icon(Icons.drag_handle, color: AppColors.grey),
+                        ),
                         const SizedBox(width: 8),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
@@ -812,28 +828,34 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
                 );
               },
             ),
-          if (_photos.length < ListingService.maxPhotos)
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickPhoto(ImageSource.camera),
-                    icon: const Icon(Icons.photo_camera_outlined),
-                    label: const Text('Camera'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickPhoto(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('Gallery'),
-                  ),
-                ),
-              ],
-            ),
-        ],
-      ),
+          ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          sliver: SliverToBoxAdapter(
+            child: _photos.length < ListingService.maxPhotos
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickPhoto(ImageSource.camera),
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          label: const Text('Camera'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickPhoto(ImageSource.gallery),
+                          icon: const Icon(Icons.photo_library_outlined),
+                          label: const Text('Gallery'),
+                        ),
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ),
+      ],
     );
   }
 

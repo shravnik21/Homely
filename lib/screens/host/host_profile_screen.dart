@@ -6,7 +6,7 @@ import 'package:homely_app/screens/auth/login_screen.dart';
 import 'package:homely_app/screens/host/host_verify_identity_screen.dart';
 import 'package:homely_app/screens/host/host_payout_details_screen.dart';
 import 'package:homely_app/screens/host/host_agreement_screen.dart';
-import 'package:homely_app/screens/settings/edit_profile_screen.dart';
+import 'package:homely_app/screens/guest/settings/edit_profile_screen.dart';
 
 /// Profile screen for hosts - mirrors the guest ProfileScreen's look
 /// (avatar, name, email) but adds the host-specific setup steps:

@@ -169,25 +169,44 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       setState(() => _stepError = error);
       return;
     }
-    setState(() {
-      _stepError = null;
-      _isBusy = true;
-    });
-    try {
-      await _persistStep(_currentStep);
-      if (!mounted) return;
-      if (_currentStep == _stepTitles.length - 1) return; // handled by Publish
-      setState(() => _currentStep++);
-      _pageController.animateToPage(
-        _currentStep,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOut,
-      );
-    } catch (e) {
-      if (mounted) setState(() => _stepError = 'Could not save: $e');
-    } finally {
-      if (mounted) setState(() => _isBusy = false);
+    setState(() => _stepError = null);
+
+    if (_currentStep == 0) {
+      // Step 0 has to block: it creates the place row that every
+      // later step (photo uploads especially) needs a real id for.
+      setState(() => _isBusy = true);
+      try {
+        await _persistStep(0);
+      } catch (e) {
+        if (mounted) setState(() => _stepError = 'Could not save: $e');
+        return;
+      } finally {
+        if (mounted) setState(() => _isBusy = false);
+      }
+    } else {
+      // The row already exists by now, so there's nothing this step's
+      // save is blocking on. Save it in the background and advance
+      // immediately instead of making the host stare at a spinner on
+      // every "Next" tap for a round trip that doesn't need to be
+      // in the critical path. If it fails, surface it as a snackbar
+      // rather than trapping them on the current page.
+      _persistStep(_currentStep).catchError((e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not save this step: $e')),
+          );
+        }
+      });
     }
+
+    if (!mounted) return;
+    if (_currentStep == _stepTitles.length - 1) return; // handled by Publish
+    setState(() => _currentStep++);
+    _pageController.animateToPage(
+      _currentStep,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOut,
+    );
   }
 
   void _goBack() {

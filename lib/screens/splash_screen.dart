@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/screens/auth/login_screen.dart';
-import 'package:homely_app/screens/home_screen.dart';
+import 'package:homely_app/screens/guest/home_screen.dart';
 import 'package:homely_app/screens/host/host_home_screen.dart';
 import 'package:homely_app/screens/host/host_onboarding_screen.dart';
 

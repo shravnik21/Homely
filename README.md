@@ -13,10 +13,7 @@ Homely is an Airbnb-style booking app for farmhouses, villas, apartments, and ho
 - **Bookings** — pick check-in/check-out dates, guest count, and confirm a reservation
 - **Booking confirmation** — dedicated confirmation screen after a successful booking
 
-### Host Mode
 
-- **Host Onboarding** - Guide on user mode
-- **Add Listings** - add host listings
 
 ## Tech Stack
 

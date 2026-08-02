@@ -77,11 +77,6 @@ All tables use **Row Level Security**: listings (`places`, `cities`) are publicl
 
 ## Getting Started
 
-### Prerequisites
-
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) (Dart ^3.3.0)
-- A [Supabase](https://supabase.com) project
-
 ### Setup
 
 1. **Clone the repo and install dependencies**

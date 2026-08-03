@@ -133,9 +133,9 @@ class _BookingCard extends StatelessWidget {
         ? AppColors.error
         : (booking.isUpcoming ? Colors.green : AppColors.grey);
     final statusBg = cancelled
-        ? AppColors.error.withOpacity(0.1)
+        ? AppColors.error.withValues(alpha: 0.1)
         : (booking.isUpcoming
-            ? Colors.green.withOpacity(0.1)
+            ? Colors.green.withValues(alpha: 0.1)
             : AppColors.lightGrey);
 
     return Container(
@@ -146,7 +146,7 @@ class _BookingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),

@@ -3,6 +3,7 @@
 /// BookingService.getUserBookings() returns from Supabase.
 class Booking {
   final String id;
+  final String userId;
   final String placeId;
   final String placeTitle;
   final String placeAddress;
@@ -16,6 +17,7 @@ class Booking {
 
   Booking({
     required this.id,
+    required this.userId,
     required this.placeId,
     required this.placeTitle,
     required this.placeAddress,
@@ -47,6 +49,7 @@ class Booking {
 
     return Booking(
       id: map['id'] as String,
+      userId: map['user_id'] as String,
       placeId: map['place_id'] as String,
       placeTitle: place['title'] as String? ?? 'Place',
       placeAddress: place['address'] as String? ?? '',

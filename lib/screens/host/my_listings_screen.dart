@@ -8,7 +8,7 @@ import 'package:homely_app/screens/host/listing_manage_screen.dart';
 
 /// The listing switcher - every property this host manages, any
 /// status (draft/published/paused), with a status chip on each. Tap
-/// a listing to manage it (edit/pause/delete); tap "+" to start a
+/// a listing to manage it (edit/pause/delete); tap "+" to start a 
 /// new one via the wizard.
 class MyListingsScreen extends StatefulWidget {
   const MyListingsScreen({super.key});
@@ -189,7 +189,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(

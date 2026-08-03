@@ -46,6 +46,10 @@ class Place {
     this.latitude,
     this.longitude,
   });
+  bool get isDraft => status == 'draft';
+  bool get isPaused => status == 'paused';
+  bool get isActive => status == 'published';
+
 
   /// The first photo, used as the card thumbnail. Falls back to a
   /// placeholder if a place somehow has no images yet.

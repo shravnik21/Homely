@@ -171,7 +171,7 @@ class _HostVerifyIdentityScreenState extends State<HostVerifyIdentityScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
+                  color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(
@@ -184,7 +184,7 @@ class _HostVerifyIdentityScreenState extends State<HostVerifyIdentityScreen> {
                         'Verifying your identity helps guests trust your listings. This step uses demo/mock verification for now.',
                         style: TextStyle(
                           fontSize: 12.5,
-                          color: AppColors.primary.withOpacity(0.9),
+                          color: AppColors.primary.withValues(alpha: 0.9),
                         ),
                       ),
                     ),
@@ -335,7 +335,7 @@ class _HostVerifyIdentityScreenState extends State<HostVerifyIdentityScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(

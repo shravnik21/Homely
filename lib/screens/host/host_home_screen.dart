@@ -2,13 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
+import 'package:homely_app/models/host_booking.dart';
 import 'package:homely_app/services/auth_service.dart';
-import 'package:homely_app/services/host_service.dart';
-import 'package:homely_app/services/listing_service.dart';
+import 'package:homely_app/services/host_listings_service.dart';
+import 'package:homely_app/services/host_bookings_service.dart';
 import 'package:homely_app/screens/host/host_profile_screen.dart';
 import 'package:homely_app/screens/host/listing_wizard_screen.dart';
 import 'package:homely_app/screens/host/my_listings_screen.dart';
-import 'package:homely_app/screens/host/listing_manage_screen.dart';
+
+/// Everything the Host Home dashboard needs, fetched together so the
+/// stats row (listings + bookings counts) and the sections below it
+/// always agree with each other and only ever show one loading spinner.
+class _HostDashboardData {
+  final List<Place> listings;
+  final List<HostBooking> bookings;
+  const _HostDashboardData({required this.listings, required this.bookings});
+}
 
 /// Landing screen for hosts, shown instead of the guest [HomeScreen]
 /// after logging in / signing up with the "Host" role selected.
@@ -21,38 +30,10 @@ class HostHomeScreen extends StatefulWidget {
 
 class _HostHomeScreenState extends State<HostHomeScreen> {
   final AuthService _authService = AuthService();
-  final HostService _hostService = HostService();
-  final ListingService _listingService = ListingService();
+  final HostListingsService _listingsService = HostListingsService();
+  final HostBookingsService _bookingsService = HostBookingsService();
 
-  // Defaults to true (assume incomplete) until the real status loads,
-  // so the reminder dot doesn't briefly flash "all good" before
-  // flipping - safer default for a "needs attention" indicator.
-  bool _hasIncompleteSetup = true;
-
-  List<Place> _listings = [];
-  bool _isLoadingListings = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSetupStatus();
-    _loadListings();
-  }
-
-  Future<void> _loadListings() async {
-    setState(() => _isLoadingListings = true);
-    try {
-      final listings = await _listingService.getMyListings();
-      if (mounted) setState(() => _listings = listings);
-    } finally {
-      if (mounted) setState(() => _isLoadingListings = false);
-    }
-  }
-
-  Future<void> _loadSetupStatus() async {
-    final incomplete = await _hostService.hasIncompleteSetup();
-    if (mounted) setState(() => _hasIncompleteSetup = incomplete);
-  }
+  late Future<_HostDashboardData> _dashboardFuture;
 
   String get _displayName {
     final meta = _authService.currentUser?.userMetadata;
@@ -68,41 +49,42 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
     return name.trim()[0].toUpperCase();
   }
 
-  void _openProfile() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const HostProfileScreen()),
-    );
-    // Re-check after returning, in case they just completed a step
-    // (e.g. saved payout details) - so the dot disappears immediately
-    // without needing to reopen the app.
-    _loadSetupStatus();
+  @override
+  void initState() {
+    super.initState();
+    _refreshDashboard();
   }
 
-  void _comingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature is coming soon.')),
+  void _refreshDashboard() {
+    setState(() {
+      _dashboardFuture = Future.wait([
+        _listingsService.getMyListings(),
+        _bookingsService.getBookingsForMyListings(),
+      ]).then((results) => _HostDashboardData(
+            listings: results[0] as List<Place>,
+            bookings: results[1] as List<HostBooking>,
+          ));
+    });
+  }
+
+  void _openProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const HostProfileScreen()),
     );
   }
 
   Future<void> _addListing() async {
-    final result = await Navigator.of(context).push(
+    final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const ListingWizardScreen()),
     );
-    if (result == true) _loadListings();
+    if (changed == true) _refreshDashboard();
   }
 
-  Future<void> _viewAllListings() async {
+  Future<void> _manageListings() async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const MyListingsScreen()),
     );
-    _loadListings();
-  }
-
-  Future<void> _manageListing(Place place) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ListingManageScreen(place: place)),
-    );
-    _loadListings();
+    _refreshDashboard();
   }
 
   @override
@@ -110,66 +92,282 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
     return Scaffold(
       backgroundColor: AppColors.white,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 24),
-            if (_hasIncompleteSetup) ...[
-              _buildSetupReminderBanner(),
-              const SizedBox(height: 20),
-            ],
-            _buildStatsRow(),
-            const SizedBox(height: 28),
-            _buildAddListingCard(),
-            const SizedBox(height: 28),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Your Listings',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.dark,
+        child: FutureBuilder<_HostDashboardData>(
+          future: _dashboardFuture,
+          builder: (context, snapshot) {
+            final listings = snapshot.data?.listings ?? [];
+            final bookings = snapshot.data?.bookings ?? [];
+            final isLoading = snapshot.connectionState == ConnectionState.waiting;
+            return RefreshIndicator(
+              onRefresh: () async => _refreshDashboard(),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 24),
+                  _buildStatsRow(listings, bookings),
+                  const SizedBox(height: 28),
+                  _buildAddListingCard(),
+                  const SizedBox(height: 28),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Your Listings',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.dark,
+                        ),
+                      ),
+                      if (listings.isNotEmpty)
+                        TextButton(
+                          onPressed: _manageListings,
+                          child: const Text('Manage all'),
+                        ),
+                    ],
                   ),
-                ),
-                if (_listings.isNotEmpty)
-                  GestureDetector(
-                    onTap: _viewAllListings,
-                    child: const Text(
-                      'View all',
-                      style: TextStyle(
-                          color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                  const SizedBox(height: 12),
+                  if (isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (listings.isEmpty)
+                    _buildEmptyListingsState()
+                  else
+                    ...listings
+                        .take(3)
+                        .map((p) => _buildListingRow(p))
+                        ,
+                  const SizedBox(height: 28),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Recent Bookings',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.dark,
+                        ),
+                      ),
+                      if (bookings.isNotEmpty)
+                        Text(
+                          '${bookings.length} total',
+                          style: const TextStyle(
+                              fontSize: 12.5, color: AppColors.grey),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (isLoading)
+                    const SizedBox.shrink()
+                  else if (bookings.isEmpty)
+                    _buildEmptyBookingsState()
+                  else
+                    // Newest booking first, each one stacked vertically
+                    // below the previous - no carousel/pagination.
+                    Column(
+                      children: bookings
+                          .map((b) => _buildBookingCard(b))
+                          .toList(),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_isLoadingListings)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_listings.isEmpty)
-              _buildEmptyListingsState()
-            else
-              ..._listings.take(3).map((place) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _buildListingRow(place),
-                  )),
-            const SizedBox(height: 28),
-            const Text(
-              'Recent Bookings',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.dark,
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookingCard(HostBooking hostBooking) {
+    final booking = hostBooking.booking;
+    late final Color statusColor;
+    late final String statusLabel;
+    if (booking.status == 'cancelled') {
+      statusColor = AppColors.error;
+      statusLabel = 'Cancelled';
+    } else if (booking.isUpcoming) {
+      statusColor = Colors.green[700]!;
+      statusLabel = 'Upcoming';
+    } else {
+      statusColor = AppColors.grey;
+      statusLabel = 'Completed';
+    }
+
+    String formatDate(DateTime d) {
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      return '${d.day} ${months[d.month - 1]}';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.lightGrey,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: CachedNetworkImage(
+                imageUrl: booking.coverImage,
+                width: 58,
+                height: 58,
+                fit: BoxFit.cover,
               ),
             ),
-            const SizedBox(height: 12),
-            _buildEmptyBookingsState(),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          booking.placeTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13.5),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          statusLabel,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: statusColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.person_outline,
+                          size: 13, color: AppColors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        hostBooking.guestName,
+                        style: const TextStyle(fontSize: 12, color: AppColors.grey),
+                      ),
+                      const SizedBox(width: 10),
+                      const Icon(Icons.people_outline,
+                          size: 13, color: AppColors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${booking.guests}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.grey),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${formatDate(booking.checkIn)} - ${formatDate(booking.checkOut)} '
+                    '· ${booking.nights} night${booking.nights == 1 ? '' : 's'}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.grey),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '₹${booking.totalPrice.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.dark),
+                  ),
+                ],
+              ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListingRow(Place place) {
+    late final Color statusColor;
+    late final String statusLabel;
+    switch (place.status) {
+      case 'draft':
+        statusColor = AppColors.grey;
+        statusLabel = 'Draft';
+        break;
+      case 'paused':
+        statusColor = Colors.orange[700]!;
+        statusLabel = 'Paused';
+        break;
+      default:
+        statusColor = Colors.green[700]!;
+        statusLabel = 'Active';
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: GestureDetector(
+        onTap: _manageListings,
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.lightGrey,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: place.photoUrls.isEmpty
+                    ? Container(
+                        width: 52,
+                        height: 52,
+                        color: AppColors.white,
+                        child: const Icon(Icons.image_not_supported_outlined,
+                            size: 20, color: AppColors.grey),
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: place.coverImage,
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  place.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                      fontSize: 10.5, fontWeight: FontWeight.w700, color: statusColor),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -183,7 +381,7 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Welcome back, host!',
+              'Welcome back, host 👋',
               style: TextStyle(color: AppColors.primary, fontSize: 13),
             ),
             const SizedBox(height: 2),
@@ -199,93 +397,39 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
         ),
         GestureDetector(
           onTap: _openProfile,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.primary,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  _initial,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primary,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              _initial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
               ),
-              if (_hasIncompleteSetup)
-                Positioned(
-                  top: -2,
-                  right: -2,
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: AppColors.error,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.white, width: 2),
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSetupReminderBanner() {
-    return GestureDetector(
-      onTap: _openProfile,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.error.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.error.withOpacity(0.25)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: AppColors.error,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'Complete verification, payout details & host agreement to start hosting.',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: AppColors.dark,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.grey, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(List<Place> listings, List<HostBooking> bookings) {
+    final activeCount = listings.where((p) => p.isActive).length;
     return Row(
       children: [
         Expanded(
-            child: _buildStatCard(label: 'Listings', value: '${_listings.length}')),
+          child: _buildStatCard(label: 'Listings', value: '$activeCount'),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _buildStatCard(label: 'Bookings', value: '0')),
+        Expanded(
+          child: _buildStatCard(label: 'Bookings', value: '${bookings.length}'),
+        ),
         const SizedBox(width: 12),
         Expanded(child: _buildStatCard(label: 'Earnings', value: '₹0')),
       ],
@@ -355,81 +499,6 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildListingRow(Place place) {
-    return GestureDetector(
-      onTap: () => _manageListing(place),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: AppColors.lightGrey,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: SizedBox(
-                width: 52,
-                height: 52,
-                child: place.photoUrls.isEmpty
-                    ? Container(
-                        color: AppColors.white,
-                        child: const Icon(Icons.home_outlined, color: AppColors.grey, size: 20),
-                      )
-                    : CachedNetworkImage(imageUrl: place.coverImage, fit: BoxFit.cover),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    place.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.dark),
-                  ),
-                  const SizedBox(height: 3),
-                  _statusChip(place.status),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.grey, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statusChip(String status) {
-    late Color color;
-    late String label;
-    switch (status) {
-      case 'published':
-        color = Colors.green;
-        label = 'Published';
-        break;
-      case 'paused':
-        color = Colors.orange;
-        label = 'Paused';
-        break;
-      default:
-        color = AppColors.grey;
-        label = 'Draft';
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(label,
-          style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
     );
   }
 

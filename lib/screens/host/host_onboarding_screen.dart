@@ -214,7 +214,7 @@ class _HostOnboardingScreenState extends State<HostOnboardingScreen> {
           Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
+              color: AppColors.primary.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(slide.icon, size: 64, color: AppColors.primary),
@@ -258,7 +258,7 @@ class _HostOnboardingScreenState extends State<HostOnboardingScreen> {
             child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
+                color: AppColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(slide.icon, size: 52, color: AppColors.primary),

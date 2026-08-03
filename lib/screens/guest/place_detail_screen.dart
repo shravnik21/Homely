@@ -285,7 +285,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                     decoration: BoxDecoration(
                       color: active
                           ? AppColors.white
-                          : AppColors.white.withOpacity(0.5),
+                          : AppColors.white.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(3),
                     ),
                   );
@@ -329,7 +329,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.1),
+        color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -435,7 +435,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
         color: AppColors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 16,
             offset: const Offset(0, -4),
           ),
@@ -500,7 +500,7 @@ class _CircleIconButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.4),
+          color: Colors.black.withValues(alpha: 0.4),
           shape: BoxShape.circle,
         ),
         child: Icon(icon, color: iconColor, size: 20),

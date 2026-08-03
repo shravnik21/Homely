@@ -503,7 +503,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
                 margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.08),
+                  color: AppColors.error.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(_stepError!,
@@ -604,7 +604,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
                 label: Text(label),
                 selected: selected,
                 onSelected: (_) => setState(() => _type = t),
-                selectedColor: AppColors.primary.withOpacity(0.15),
+                selectedColor: AppColors.primary.withValues(alpha: 0.15),
                 labelStyle: TextStyle(
                   color: selected ? AppColors.primary : AppColors.dark,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
@@ -653,7 +653,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
                   _cityId = c['id'] as String;
                   _cityName = c['name'] as String;
                 }),
-                selectedColor: AppColors.primary.withOpacity(0.15),
+                selectedColor: AppColors.primary.withValues(alpha: 0.15),
                 labelStyle: TextStyle(
                   color: selected ? AppColors.primary : AppColors.dark,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
@@ -745,25 +745,25 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   Widget _stepPhotos() {
     return CustomScrollView(
       slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        const SliverPadding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
           sliver: SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Add photos',
                   style: TextStyle(
                       fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.dark),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 Text(
                   'Add up to ${ListingService.maxPhotos} photos. The first photo is '
                   'your cover photo - drag to reorder. Minimum $kMinPhotosToPublish '
                   'required to publish.',
-                  style: const TextStyle(color: AppColors.grey, fontSize: 13, height: 1.4),
+                  style: TextStyle(color: AppColors.grey, fontSize: 13, height: 1.4),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
               ],
             ),
           ),
@@ -891,7 +891,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
                     _amenities.remove(a);
                   }
                 }),
-                selectedColor: AppColors.primary.withOpacity(0.15),
+                selectedColor: AppColors.primary.withValues(alpha: 0.15),
                 labelStyle: TextStyle(
                   color: selected ? AppColors.primary : AppColors.dark,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,

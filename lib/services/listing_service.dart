@@ -156,7 +156,7 @@ class ListingService {
   }
 
   String? _pathFromPublicUrl(String url) {
-    final marker = '/listing-images/';
+    const marker = '/listing-images/';
     final index = url.indexOf(marker);
     if (index == -1) return null;
     return url.substring(index + marker.length);

@@ -100,7 +100,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       Container(
                         width: 72,
                         height: 72,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           shape: BoxShape.circle,
                           color: AppColors.lightGrey,
                         ),

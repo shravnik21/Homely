@@ -16,13 +16,39 @@ class BookingService {
     final response = await _client
         .from('bookings')
         .select(
-            '*, places(title, address, city_id, cities(name), place_images(image_url, sort_order))')
+            '*, places(title, address, city_id, price_per_night, max_guests, cities(name), place_images(image_url, sort_order))')
         .eq('user_id', userId)
         .order('check_in', ascending: false);
 
     return (response as List)
         .map((row) => Booking.fromMap(row as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Marks a booking as cancelled. RLS only allows a user to update
+  /// rows where `user_id` matches their own id (see
+  /// schema_bookings.sql), so this can never touch someone else's
+  /// booking even if the id were guessed.
+  Future<void> cancelBooking(String bookingId) async {
+    await _client
+        .from('bookings')
+        .update({'status': 'cancelled'})
+        .eq('id', bookingId);
+  }
+
+  /// Updates the dates (and recomputed total price) on an existing
+  /// booking, for the "Reschedule" option under Manage booking.
+  Future<void> rescheduleBooking({
+    required String bookingId,
+    required DateTime checkIn,
+    required DateTime checkOut,
+    required num totalPrice,
+  }) async {
+    await _client.from('bookings').update({
+      'check_in': _formatDate(checkIn),
+      'check_out': _formatDate(checkOut),
+      'total_price': totalPrice,
+    }).eq('id', bookingId);
   }
 
   /// Inserts the booking row and returns its generated `id`, so the

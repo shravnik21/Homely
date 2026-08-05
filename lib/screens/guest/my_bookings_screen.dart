@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/booking.dart';
 import 'package:homely_app/services/booking_service.dart';
+import 'booking_detail_screen.dart';
 
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
@@ -19,6 +20,24 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   void initState() {
     super.initState();
     _bookingsFuture = _bookingService.getUserBookings();
+  }
+
+  // Re-fetches the list - called after returning from the booking
+  // details screen if a reschedule/cancel actually happened there,
+  // so the card (dates, status, price) reflects the change.
+  void _refreshBookings() {
+    setState(() {
+      _bookingsFuture = _bookingService.getUserBookings();
+    });
+  }
+
+  Future<void> _openBookingDetails(Booking booking) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => BookingDetailScreen(booking: booking),
+      ),
+    );
+    if (changed == true) _refreshBookings();
   }
 
   String _fmt(DateTime d) {
@@ -112,6 +131,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       itemBuilder: (context, index) => _BookingCard(
         booking: bookings[index],
         formatDate: _fmt,
+        onTap: () => _openBookingDetails(bookings[index]),
       ),
     );
   }
@@ -120,11 +140,24 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 class _BookingCard extends StatelessWidget {
   final Booking booking;
   final String Function(DateTime) formatDate;
+  final VoidCallback onTap;
 
-  const _BookingCard({required this.booking, required this.formatDate});
+  const _BookingCard({
+    required this.booking,
+    required this.formatDate,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: _buildCard(context),
+    );
+  }
+
+  Widget _buildCard(BuildContext context) {
     final cancelled = booking.status == 'cancelled';
     final statusLabel = cancelled
         ? 'Cancelled'

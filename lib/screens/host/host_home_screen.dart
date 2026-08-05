@@ -9,6 +9,7 @@ import 'package:homely_app/services/host_bookings_service.dart';
 import 'package:homely_app/screens/host/host_profile_screen.dart';
 import 'package:homely_app/screens/host/listing_wizard_screen.dart';
 import 'package:homely_app/screens/host/my_listings_screen.dart';
+import 'package:homely_app/screens/host/host_bookings_screen.dart';
 
 /// Everything the Host Home dashboard needs, fetched together so the
 /// stats row (listings + bookings counts) and the sections below it
@@ -87,6 +88,16 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
     _refreshDashboard();
   }
 
+  Future<void> _viewAllBookings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const HostBookingsScreen()),
+    );
+    // A cancel could have happened on that screen (guests can also
+    // cancel from their side while the host is looking at this), so
+    // refresh the dashboard counts/preview on return either way.
+    _refreshDashboard();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -153,10 +164,9 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
                         ),
                       ),
                       if (bookings.isNotEmpty)
-                        Text(
-                          '${bookings.length} total',
-                          style: const TextStyle(
-                              fontSize: 12.5, color: AppColors.grey),
+                        TextButton(
+                          onPressed: _viewAllBookings,
+                          child: const Text('View all'),
                         ),
                     ],
                   ),
@@ -166,10 +176,13 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
                   else if (bookings.isEmpty)
                     _buildEmptyBookingsState()
                   else
-                    // Newest booking first, each one stacked vertically
-                    // below the previous - no carousel/pagination.
+                    // Newest booking first, capped to a handful here -
+                    // "View all" above opens the full list (with an
+                    // Upcoming/Completed/Cancelled split) on
+                    // HostBookingsScreen.
                     Column(
                       children: bookings
+                          .take(5)
                           .map((b) => _buildBookingCard(b))
                           .toList(),
                     ),

@@ -381,7 +381,7 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Welcome back, host 👋',
+              'Welcome back, host!',
               style: TextStyle(color: AppColors.primary, fontSize: 13),
             ),
             const SizedBox(height: 2),

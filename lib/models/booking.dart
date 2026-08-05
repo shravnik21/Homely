@@ -14,6 +14,11 @@ class Booking {
   final int guests;
   final num totalPrice;
   final String status; // 'confirmed' | 'cancelled' (from the DB column)
+  // Needed to recompute the price when a guest reschedules to a
+  // different number of nights - not shown directly on the bookings
+  // list, only used by the reschedule flow.
+  final num pricePerNight;
+  final int maxGuests;
 
   Booking({
     required this.id,
@@ -28,6 +33,8 @@ class Booking {
     required this.guests,
     required this.totalPrice,
     required this.status,
+    this.pricePerNight = 0,
+    this.maxGuests = 1,
   });
 
   int get nights => checkOut.difference(checkIn).inDays;
@@ -37,6 +44,32 @@ class Booking {
   /// or "Completed" purely based on today's date vs check-out date.
   bool get isUpcoming =>
       status != 'cancelled' && checkOut.isAfter(DateTime.now());
+
+  /// Used by the booking-details screen to reflect a reschedule/cancel
+  /// immediately without refetching the whole list from Supabase.
+  Booking copyWith({
+    DateTime? checkIn,
+    DateTime? checkOut,
+    num? totalPrice,
+    String? status,
+  }) {
+    return Booking(
+      id: id,
+      userId: userId,
+      placeId: placeId,
+      placeTitle: placeTitle,
+      placeAddress: placeAddress,
+      cityName: cityName,
+      coverImage: coverImage,
+      checkIn: checkIn ?? this.checkIn,
+      checkOut: checkOut ?? this.checkOut,
+      guests: guests,
+      totalPrice: totalPrice ?? this.totalPrice,
+      status: status ?? this.status,
+      pricePerNight: pricePerNight,
+      maxGuests: maxGuests,
+    );
+  }
 
   factory Booking.fromMap(Map<String, dynamic> map) {
     final place = map['places'] as Map<String, dynamic>? ?? {};
@@ -60,6 +93,8 @@ class Booking {
       guests: map['guests'] as int? ?? 1,
       totalPrice: map['total_price'] as num? ?? 0,
       status: map['status'] as String? ?? 'confirmed',
+      pricePerNight: place['price_per_night'] as num? ?? 0,
+      maxGuests: place['max_guests'] as int? ?? 1,
     );
   }
 }

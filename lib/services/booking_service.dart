@@ -25,15 +25,24 @@ class BookingService {
         .toList();
   }
 
-  /// Marks a booking as cancelled. RLS only allows a user to update
-  /// rows where `user_id` matches their own id (see
-  /// schema_bookings.sql), so this can never touch someone else's
-  /// booking even if the id were guessed.
-  Future<void> cancelBooking(String bookingId) async {
-    await _client
-        .from('bookings')
-        .update({'status': 'cancelled'})
-        .eq('id', bookingId);
+  /// Marks a booking as cancelled and records what CancellationPolicy
+  /// charged for it - [fee]/[refund] are computed by the caller
+  /// (CancellationDetailScreen shows the same numbers to the guest
+  /// before they confirm) and stored as-is so they can't drift later.
+  /// RLS only allows a user to update rows where `user_id` matches
+  /// their own id (see schema_bookings.sql), so this can never touch
+  /// someone else's booking even if the id were guessed.
+  Future<void> cancelBooking(
+    String bookingId, {
+    required num fee,
+    required num refund,
+  }) async {
+    await _client.from('bookings').update({
+      'status': 'cancelled',
+      'cancellation_fee': fee,
+      'refund_amount': refund,
+      'cancelled_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', bookingId);
   }
 
   /// Updates the dates (and recomputed total price) on an existing

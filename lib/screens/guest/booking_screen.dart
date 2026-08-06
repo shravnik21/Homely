@@ -3,6 +3,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/booking_service.dart';
+import 'package:homely_app/services/cancellation_policy.dart';
 import 'package:homely_app/screens/guest/booking_confirmation_screen.dart';
 
 class BookingScreen extends StatefulWidget {
@@ -315,10 +316,56 @@ class _BookingScreenState extends State<BookingScreen> {
             ),
             const SizedBox(height: 10),
             _buildPriceBreakdown(),
+
+            const SizedBox(height: 28),
+            const Text(
+              'Cancellation policy',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.dark),
+            ),
+            const SizedBox(height: 10),
+            _buildCancellationPolicy(),
           ],
         ),
       ),
       bottomNavigationBar: _buildConfirmBar(),
+    );
+  }
+
+  Widget _buildCancellationPolicy() {
+    final freeDays = CancellationPolicy.fullRefundThresholdDays;
+    final noRefundDays = CancellationPolicy.noRefundThresholdDays;
+    final partialPct = (CancellationPolicy.partialRefundFeeRate * 100).round();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.lightGrey,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _PolicyRow(
+            days: '$freeDays+ days before check-in',
+            outcome: 'Free cancellation',
+            good: true,
+          ),
+          const SizedBox(height: 10),
+          _PolicyRow(
+            days: '$noRefundDays–${freeDays - 1} days before check-in',
+            outcome: '${100 - partialPct}% refund',
+            good: false,
+          ),
+          const SizedBox(height: 10),
+          _PolicyRow(
+            days: 'Day before or day of check-in',
+            outcome: 'No refund',
+            good: false,
+          ),
+        ],
+      ),
     );
   }
 
@@ -529,6 +576,46 @@ class _StepperButton extends StatelessWidget {
         child: Icon(icon,
             size: 16, color: enabled ? Colors.white : AppColors.grey),
       ),
+    );
+  }
+}
+
+/// One row of the cancellation-policy summary shown before a guest
+/// confirms a booking - a plain-language readout of
+/// CancellationPolicy's tiers so there are no surprises later.
+class _PolicyRow extends StatelessWidget {
+  final String days;
+  final String outcome;
+  final bool good;
+
+  const _PolicyRow({required this.days, required this.outcome, required this.good});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          good ? Icons.check_circle_outline : Icons.remove_circle_outline,
+          size: 16,
+          color: good ? Colors.green[700] : AppColors.grey,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            days,
+            style: const TextStyle(fontSize: 12.5, color: AppColors.dark),
+          ),
+        ),
+        Text(
+          outcome,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: good ? Colors.green[700] : AppColors.dark,
+          ),
+        ),
+      ],
     );
   }
 }

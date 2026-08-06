@@ -10,12 +10,12 @@ class HostBookingsService {
   final _client = SupabaseConfig.client;
 
   /// Every booking made on any of the current host's listings, newest
-  /// check-in first, each with the guest's name attached. One query
-  /// for the bookings (`places!inner(...)` + `.eq('places.host_id', ...)`
-  /// does the "only my listings" filtering server-side) plus one
-  /// follow-up query to resolve guest names, since `bookings.user_id`
-  /// and `profiles.id` aren't linked by a foreign key PostgREST can
-  /// auto-embed across.
+  /// check-in first, each with the guest's contact info attached. One
+  /// query for the bookings (`places!inner(...)` +
+  /// `.eq('places.host_id', ...)` does the "only my listings"
+  /// filtering server-side) plus one follow-up query to resolve guest
+  /// profiles, since `bookings.user_id` and `profiles.id` aren't
+  /// linked by a foreign key PostgREST can auto-embed across.
   Future<List<HostBooking>> getBookingsForMyListings() async {
     final hostId = _client.auth.currentUser?.id;
     if (hostId == null) return [];
@@ -27,34 +27,58 @@ class HostBookingsService {
         .eq('places.host_id', hostId)
         .order('check_in', ascending: false);
 
-    final bookings = (response as List)
-        .map((row) => Booking.fromMap(row as Map<String, dynamic>))
-        .toList();
+    final rows = (response as List).cast<Map<String, dynamic>>();
+    final bookings = rows.map((row) => Booking.fromMap(row)).toList();
+    final notesByBookingId = <String, String?>{
+      for (final row in rows) row['id'] as String: row['host_notes'] as String?,
+    };
 
     if (bookings.isEmpty) return [];
 
     final guestIds = bookings.map((b) => b.userId).toSet().toList();
-    final namesById = <String, String>{};
+    final profileById = <String, Map<String, dynamic>>{};
     try {
       final profileRows = await _client
           .from('profiles')
-          .select('id, full_name')
+          .select('id, full_name, email, phone, avatar_url')
           .inFilter('id', guestIds);
       for (final row in profileRows as List) {
-        final name = row['full_name'] as String?;
-        namesById[row['id'] as String] =
-            (name != null && name.trim().isNotEmpty) ? name.trim() : 'Guest';
+        profileById[row['id'] as String] = row as Map<String, dynamic>;
       }
     } catch (_) {
       // Non-critical - bookings still render, just with a generic
-      // "Guest" label instead of a real name.
+      // "Guest" label instead of real contact info.
+    }
+
+    String nameFor(String userId) {
+      final name = profileById[userId]?['full_name'] as String?;
+      return (name != null && name.trim().isNotEmpty) ? name.trim() : 'Guest';
     }
 
     return bookings
         .map((b) => HostBooking(
               booking: b,
-              guestName: namesById[b.userId] ?? 'Guest',
+              guestName: nameFor(b.userId),
+              guestEmail: profileById[b.userId]?['email'] as String?,
+              guestPhone: profileById[b.userId]?['phone'] as String?,
+              guestAvatarUrl: profileById[b.userId]?['avatar_url'] as String?,
+              hostNotes: notesByBookingId[b.id],
             ))
         .toList();
+  }
+
+  /// Saves (or clears, if [notes] is null/empty) the host's private
+  /// note for one booking. Only succeeds for bookings on a listing
+  /// the current host owns - enforced by the RLS policy added in
+  /// schema_host_booking_notes.sql.
+  Future<void> updateHostNotes({
+    required String bookingId,
+    required String? notes,
+  }) async {
+    final trimmed = notes?.trim();
+    await _client
+        .from('bookings')
+        .update({'host_notes': (trimmed == null || trimmed.isEmpty) ? null : trimmed})
+        .eq('id', bookingId);
   }
 }

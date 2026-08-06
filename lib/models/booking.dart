@@ -19,6 +19,14 @@ class Booking {
   // list, only used by the reschedule flow.
   final num pricePerNight;
   final int maxGuests;
+  // Set only once a cancellation has actually happened - the fee
+  // charged and amount refunded, priced at that moment by
+  // CancellationPolicy and then stored as-is (see
+  // schema_cancellation_fee.sql) so it doesn't drift if the policy
+  // changes later.
+  final num? cancellationFee;
+  final num? refundAmount;
+  final DateTime? cancelledAt;
 
   Booking({
     required this.id,
@@ -35,6 +43,9 @@ class Booking {
     required this.status,
     this.pricePerNight = 0,
     this.maxGuests = 1,
+    this.cancellationFee,
+    this.refundAmount,
+    this.cancelledAt,
   });
 
   int get nights => checkOut.difference(checkIn).inDays;
@@ -52,6 +63,9 @@ class Booking {
     DateTime? checkOut,
     num? totalPrice,
     String? status,
+    num? cancellationFee,
+    num? refundAmount,
+    DateTime? cancelledAt,
   }) {
     return Booking(
       id: id,
@@ -68,6 +82,9 @@ class Booking {
       status: status ?? this.status,
       pricePerNight: pricePerNight,
       maxGuests: maxGuests,
+      cancellationFee: cancellationFee ?? this.cancellationFee,
+      refundAmount: refundAmount ?? this.refundAmount,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
     );
   }
 
@@ -95,6 +112,11 @@ class Booking {
       status: map['status'] as String? ?? 'confirmed',
       pricePerNight: place['price_per_night'] as num? ?? 0,
       maxGuests: place['max_guests'] as int? ?? 1,
+      cancellationFee: map['cancellation_fee'] as num?,
+      refundAmount: map['refund_amount'] as num?,
+      cancelledAt: map['cancelled_at'] != null
+          ? DateTime.parse(map['cancelled_at'] as String)
+          : null,
     );
   }
 }

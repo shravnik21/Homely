@@ -4,6 +4,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/booking.dart';
 import 'package:homely_app/services/booking_service.dart';
+import 'package:homely_app/services/cancellation_policy.dart';
 
 /// Full-detail view for a single booking, opened by tapping a card on
 /// [MyBookingsScreen]. Mirrors the layout of [BookingConfirmationScreen]
@@ -113,7 +114,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         ? 'Booking cancelled'
         : (_booking.isUpcoming ? 'Booking confirmed' : 'Trip completed');
     final subtitle = cancelled
-        ? 'This booking is no longer active.'
+        ? (_booking.refundAmount != null
+            ? '₹${_booking.refundAmount!.toStringAsFixed(0)} refunded'
+                '${(_booking.cancellationFee ?? 0) > 0 ? ' · ₹${_booking.cancellationFee!.toStringAsFixed(0)} cancellation fee' : ''}.'
+            : 'This booking is no longer active.')
         : (_booking.isUpcoming
             ? 'You\'re all set for this stay.'
             : 'We hope you enjoyed your stay.');
@@ -318,6 +322,29 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                       color: AppColors.dark)),
             ],
           ),
+          if (_isCancelled && _booking.refundAmount != null) ...[
+            const Divider(height: 24, color: AppColors.white),
+            if ((_booking.cancellationFee ?? 0) > 0) ...[
+              _detailRow('Cancellation fee',
+                  '₹${_booking.cancellationFee!.toStringAsFixed(0)}'),
+              const SizedBox(height: 10),
+            ],
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Refunded',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.dark)),
+                Text('₹${_booking.refundAmount!.toStringAsFixed(0)}',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[700])),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -591,15 +618,39 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     }
   }
 
-  // ---- Cancel: confirm first, this can't be undone ----
+  // ---- Cancel: show the real fee/refund breakdown first, this
+  // can't be undone ----
   Future<void> _confirmCancel() async {
+    final quote = CancellationPolicy.quote(
+      checkIn: _booking.checkIn,
+      totalPrice: _booking.totalPrice,
+    );
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Cancel this booking?'),
-        content: const Text(
-          'This will cancel your stay and can\'t be undone.',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              quote.headline,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: quote.hasFee ? AppColors.error : Colors.green[700],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(quote.explanation, style: const TextStyle(fontSize: 13)),
+            if (quote.hasFee) ...[
+              const SizedBox(height: 14),
+              _cancelQuoteRow('Cancellation fee', quote.fee),
+              const SizedBox(height: 4),
+              _cancelQuoteRow("You'll be refunded", quote.refund),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -619,14 +670,29 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
     setState(() => _isUpdating = true);
     try {
-      await _bookingService.cancelBooking(_booking.id);
+      await _bookingService.cancelBooking(
+        _booking.id,
+        fee: quote.fee,
+        refund: quote.refund,
+      );
       if (!mounted) return;
       setState(() {
-        _booking = _booking.copyWith(status: 'cancelled');
+        _booking = _booking.copyWith(
+          status: 'cancelled',
+          cancellationFee: quote.fee,
+          refundAmount: quote.refund,
+          cancelledAt: DateTime.now(),
+        );
         _didChange = true;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Booking cancelled.')),
+        SnackBar(
+          content: Text(
+            quote.hasFee
+                ? 'Booking cancelled. ₹${quote.refund.toStringAsFixed(0)} will be refunded.'
+                : 'Booking cancelled. You\'ll be fully refunded.',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -639,6 +705,19 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     } finally {
       if (mounted) setState(() => _isUpdating = false);
     }
+  }
+
+  Widget _cancelQuoteRow(String label, num amount) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 13, color: AppColors.grey)),
+        Text(
+          '₹${amount.toStringAsFixed(0)}',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.dark),
+        ),
+      ],
+    );
   }
 }
 

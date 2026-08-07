@@ -27,6 +27,14 @@ class Booking {
   final num? cancellationFee;
   final num? refundAmount;
   final DateTime? cancelledAt;
+  // Set only once a reschedule has actually happened - mirrors the
+  // cancellation fields above so the host dashboard's "Booking
+  // updates" card can tell a fresh reschedule apart from a booking
+  // that was simply created with these dates, and show what the
+  // dates used to be (see schema_reschedule_tracking.sql).
+  final DateTime? rescheduledAt;
+  final DateTime? previousCheckIn;
+  final DateTime? previousCheckOut;
 
   Booking({
     required this.id,
@@ -46,6 +54,9 @@ class Booking {
     this.cancellationFee,
     this.refundAmount,
     this.cancelledAt,
+    this.rescheduledAt,
+    this.previousCheckIn,
+    this.previousCheckOut,
   });
 
   int get nights => checkOut.difference(checkIn).inDays;
@@ -66,6 +77,9 @@ class Booking {
     num? cancellationFee,
     num? refundAmount,
     DateTime? cancelledAt,
+    DateTime? rescheduledAt,
+    DateTime? previousCheckIn,
+    DateTime? previousCheckOut,
   }) {
     return Booking(
       id: id,
@@ -85,6 +99,9 @@ class Booking {
       cancellationFee: cancellationFee ?? this.cancellationFee,
       refundAmount: refundAmount ?? this.refundAmount,
       cancelledAt: cancelledAt ?? this.cancelledAt,
+      rescheduledAt: rescheduledAt ?? this.rescheduledAt,
+      previousCheckIn: previousCheckIn ?? this.previousCheckIn,
+      previousCheckOut: previousCheckOut ?? this.previousCheckOut,
     );
   }
 
@@ -116,6 +133,15 @@ class Booking {
       refundAmount: map['refund_amount'] as num?,
       cancelledAt: map['cancelled_at'] != null
           ? DateTime.parse(map['cancelled_at'] as String)
+          : null,
+      rescheduledAt: map['rescheduled_at'] != null
+          ? DateTime.parse(map['rescheduled_at'] as String)
+          : null,
+      previousCheckIn: map['previous_check_in'] != null
+          ? DateTime.parse(map['previous_check_in'] as String)
+          : null,
+      previousCheckOut: map['previous_check_out'] != null
+          ? DateTime.parse(map['previous_check_out'] as String)
           : null,
     );
   }

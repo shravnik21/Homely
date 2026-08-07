@@ -4,6 +4,8 @@ import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/services/places_service.dart';
 import 'package:homely_app/services/wishlist_service.dart';
+import 'package:homely_app/utils/auto_reload_on_reconnect.dart';
+import 'package:homely_app/utils/network_retry.dart';
 import 'package:homely_app/widgets/place_card.dart';
 import 'place_detail_screen.dart';
 import 'profile_screen.dart';
@@ -16,7 +18,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with AutoReloadOnReconnectMixin {
   final AuthService _authService = AuthService();
   final PlacesService _placesService = PlacesService();
   final WishlistService _wishlistService = WishlistService();
@@ -42,8 +45,30 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     // initState runs once when the widget is first inserted into the
     // tree - this is the correct place to kick off a one-time fetch.
-    _placesFuture = _placesService.getPlaces();
+    _loadPlaces();
     _searchController.addListener(_onSearchChanged);
+    _loadWishlistedIds();
+    // If this first load fails because the device was offline (or
+    // just reconnected and its clock hasn't finished syncing yet -
+    // see network_retry.dart), don't leave the user stuck on the
+    // error screen - reload automatically the moment we're back on
+    // a network.
+    startAutoReloadOnReconnect();
+  }
+
+  /// Kicks off (or re-kicks-off, on reconnect) the places fetch.
+  /// Wrapped in [withRetry] so a transient clock-skew failure right
+  /// after reconnecting resolves itself instead of surfacing an
+  /// error the user has to manually retry.
+  void _loadPlaces() {
+    setState(() {
+      _placesFuture = withRetry(() => _placesService.getPlaces());
+    });
+  }
+
+  @override
+  void onReconnected() {
+    _loadPlaces();
     _loadWishlistedIds();
   }
 
@@ -95,6 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    disposeAutoReloadOnReconnect();
     super.dispose();
   }
 

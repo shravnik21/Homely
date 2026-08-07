@@ -1,10 +1,45 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:homely_app/config/supabase_config.dart';
 import 'package:homely_app/models/booking.dart';
+
+/// Thrown when the database rejects a booking insert/update because
+/// it would overlap another active booking for the same place (see
+/// schema_no_overlapping_bookings.sql's EXCLUDE constraint) - the
+/// last-resort case where two guests both had the calendar open on
+/// the same free dates and one of them lost the race. Distinct from
+/// a generic Exception so calling screens can show a specific,
+/// actionable message instead of a raw Postgres error string.
+class BookingConflictException implements Exception {
+  final String message;
+  const BookingConflictException([
+    this.message = 'Those dates were just booked by someone else. '
+        'Please choose different dates.',
+  ]);
+
+  @override
+  String toString() => message;
+}
 
 /// Same service-layer pattern as AuthService/PlacesService - screens
 /// never talk to Supabase directly, they call this instead.
 class BookingService {
   final _client = SupabaseConfig.client;
+
+  /// Postgres' code for a violated EXCLUDE constraint - the one
+  /// no_overlapping_bookings raises when a new/updated booking
+  /// overlaps an existing active one for the same place.
+  static const _exclusionViolationCode = '23P01';
+
+  /// Re-throws [e] as a [BookingConflictException] if it's the
+  /// overlapping-dates constraint from schema_no_overlapping_bookings.sql,
+  /// otherwise re-throws it unchanged so genuine errors (network,
+  /// auth, etc) still surface as themselves.
+  Never _rethrowMapped(Object e) {
+    if (e is PostgrestException && e.code == _exclusionViolationCode) {
+      throw const BookingConflictException();
+    }
+    throw e;
+  }
 
   /// Fetches the logged-in user's bookings, each joined with its
   /// place's title, address, city, and cover image - one network
@@ -47,17 +82,32 @@ class BookingService {
 
   /// Updates the dates (and recomputed total price) on an existing
   /// booking, for the "Reschedule" option under Manage booking.
+  /// [previousCheckIn]/[previousCheckOut] are the dates being
+  /// replaced - stored alongside a fresh `rescheduled_at` timestamp
+  /// (see schema_reschedule_tracking.sql) purely so the host
+  /// dashboard's "Booking updates" card can show what changed,
+  /// mirroring how cancelBooking() records cancellation_fee/
+  /// refund_amount for its own card.
   Future<void> rescheduleBooking({
     required String bookingId,
     required DateTime checkIn,
     required DateTime checkOut,
     required num totalPrice,
+    required DateTime previousCheckIn,
+    required DateTime previousCheckOut,
   }) async {
-    await _client.from('bookings').update({
-      'check_in': _formatDate(checkIn),
-      'check_out': _formatDate(checkOut),
-      'total_price': totalPrice,
-    }).eq('id', bookingId);
+    try {
+      await _client.from('bookings').update({
+        'check_in': _formatDate(checkIn),
+        'check_out': _formatDate(checkOut),
+        'total_price': totalPrice,
+        'previous_check_in': _formatDate(previousCheckIn),
+        'previous_check_out': _formatDate(previousCheckOut),
+        'rescheduled_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', bookingId);
+    } catch (e) {
+      _rethrowMapped(e);
+    }
   }
 
   /// Inserts the booking row and returns its generated `id`, so the
@@ -80,20 +130,24 @@ class BookingService {
     // `.select('id').single()` asks PostgREST to hand back the row it
     // just inserted (instead of the default empty response) so we can
     // read the new booking's id straight away.
-    final row = await _client
-        .from('bookings')
-        .insert({
-          'user_id': userId,
-          'place_id': placeId,
-          'check_in': _formatDate(checkIn),
-          'check_out': _formatDate(checkOut),
-          'guests': guests,
-          'total_price': totalPrice,
-        })
-        .select('id')
-        .single();
+    try {
+      final row = await _client
+          .from('bookings')
+          .insert({
+            'user_id': userId,
+            'place_id': placeId,
+            'check_in': _formatDate(checkIn),
+            'check_out': _formatDate(checkOut),
+            'guests': guests,
+            'total_price': totalPrice,
+          })
+          .select('id')
+          .single();
 
-    return row['id'] as String;
+      return row['id'] as String;
+    } catch (e) {
+      _rethrowMapped(e);
+    }
   }
 
   String _formatDate(DateTime date) {

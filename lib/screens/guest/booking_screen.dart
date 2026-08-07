@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:table_calendar/table_calendar.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/booking_service.dart';
 import 'package:homely_app/services/cancellation_policy.dart';
 import 'package:homely_app/screens/guest/booking_confirmation_screen.dart';
+import 'package:homely_app/widgets/availability_date_range_sheet.dart';
 
 class BookingScreen extends StatefulWidget {
   final Place place;
@@ -42,113 +42,22 @@ class _BookingScreenState extends State<BookingScreen> {
     return '${d.day} ${months[d.month - 1]}';
   }
 
-  // ---- The curved bottom-sheet calendar, Airbnb-style ----
+  // ---- The curved bottom-sheet calendar, Airbnb-style, with dates
+  // someone else already booked greyed out and unselectable ----
   Future<void> _openDatePicker() async {
-    DateTime? tempStart = _checkIn;
-    DateTime? tempEnd = _checkOut;
-
-    await showModalBottomSheet(
+    final range = await showAvailabilityDatePicker(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // grab handle
-                    Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: AppColors.lightGrey,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Select dates',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.dark,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TableCalendar(
-                      firstDay: DateTime.now(),
-                      lastDay: DateTime.now().add(const Duration(days: 365)),
-                      focusedDay: tempStart ?? DateTime.now(),
-                      rangeStartDay: tempStart,
-                      rangeEndDay: tempEnd,
-                      rangeSelectionMode: RangeSelectionMode.toggledOn,
-                      calendarFormat: CalendarFormat.month,
-                      headerStyle: const HeaderStyle(
-                        formatButtonVisible: false,
-                        titleCentered: true,
-                        titleTextStyle: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      calendarStyle: const CalendarStyle(
-                        rangeStartDecoration: BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        rangeEndDecoration: BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        withinRangeDecoration: BoxDecoration(
-                          color: Color(0x22FF385C),
-                          shape: BoxShape.circle,
-                        ),
-                        todayDecoration: BoxDecoration(
-                          color: AppColors.lightGrey,
-                          shape: BoxShape.circle,
-                        ),
-                        todayTextStyle: TextStyle(color: AppColors.dark),
-                      ),
-                      onRangeSelected: (start, end, focusedDay) {
-                        setSheetState(() {
-                          tempStart = start;
-                          tempEnd = end;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: (tempStart != null && tempEnd != null)
-                            ? () {
-                                setState(() {
-                                  _checkIn = tempStart;
-                                  _checkOut = tempEnd;
-                                });
-                                Navigator.of(sheetContext).pop();
-                              }
-                            : null,
-                        child: const Text('Save dates'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      placeId: widget.place.id,
+      title: 'Select dates',
+      saveLabel: 'Save dates',
+      initialStart: _checkIn,
+      initialEnd: _checkOut,
     );
+    if (range == null) return;
+    setState(() {
+      _checkIn = range.start;
+      _checkOut = range.end;
+    });
   }
 
   Future<void> _confirmBooking() async {
@@ -165,9 +74,22 @@ class _BookingScreenState extends State<BookingScreen> {
       _showSuccessDialog(bookingId);
     } catch (e) {
       if (!mounted) return;
+      // A BookingConflictException means someone else grabbed these
+      // exact dates between us loading the calendar and confirming -
+      // the DB's no_overlapping_bookings constraint (see
+      // schema_no_overlapping_bookings.sql) is what actually caught
+      // it. Clear the picked dates so the guest can't just tap
+      // "Confirm" again and hit the same wall.
+      final isConflict = e is BookingConflictException;
+      if (isConflict) {
+        setState(() {
+          _checkIn = null;
+          _checkOut = null;
+        });
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Booking failed: $e'),
+          content: Text(isConflict ? e.toString() : 'Booking failed: $e'),
           backgroundColor: AppColors.error,
         ),
       );

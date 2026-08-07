@@ -14,6 +14,10 @@ dependencies:
   # Supabase
   supabase_flutter: ^2.5.6
 
+  # Detecting when the device comes back online, to auto-reload
+  # screens that failed to load while offline (see AutoReloadOnReconnectMixin)
+  connectivity_plus: ^6.0.3
+
   # Env variables
   flutter_dotenv: ^5.1.0
 

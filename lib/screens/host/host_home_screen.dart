@@ -10,6 +10,8 @@ import 'package:homely_app/screens/host/host_profile_screen.dart';
 import 'package:homely_app/screens/host/listing_wizard_screen.dart';
 import 'package:homely_app/screens/host/my_listings_screen.dart';
 import 'package:homely_app/screens/host/host_bookings_screen.dart';
+import 'package:homely_app/utils/auto_reload_on_reconnect.dart';
+import 'package:homely_app/utils/network_retry.dart';
 
 /// Everything the Host Home dashboard needs, fetched together so the
 /// stats row (listings + bookings counts) and the sections below it
@@ -18,6 +20,34 @@ class _HostDashboardData {
   final List<Place> listings;
   final List<HostBooking> bookings;
   const _HostDashboardData({required this.listings, required this.bookings});
+}
+
+enum _BookingUpdateType { cancelled, rescheduled }
+
+/// One recent change (cancellation or reschedule) a guest made to a
+/// booking on one of the host's listings - built from [Booking]'s
+/// cancelledAt/rescheduledAt fields, purely to drive the "Booking
+/// updates" card below. Not persisted anywhere itself.
+class _BookingUpdate {
+  final _BookingUpdateType type;
+  final String guestName;
+  final String placeTitle;
+  final DateTime when;
+  final DateTime? previousCheckIn;
+  final DateTime? previousCheckOut;
+  final DateTime? newCheckIn;
+  final DateTime? newCheckOut;
+
+  const _BookingUpdate({
+    required this.type,
+    required this.guestName,
+    required this.placeTitle,
+    required this.when,
+    this.previousCheckIn,
+    this.previousCheckOut,
+    this.newCheckIn,
+    this.newCheckOut,
+  });
 }
 
 /// Landing screen for hosts, shown instead of the guest [HomeScreen]
@@ -29,7 +59,8 @@ class HostHomeScreen extends StatefulWidget {
   State<HostHomeScreen> createState() => _HostHomeScreenState();
 }
 
-class _HostHomeScreenState extends State<HostHomeScreen> {
+class _HostHomeScreenState extends State<HostHomeScreen>
+    with AutoReloadOnReconnectMixin {
   final AuthService _authService = AuthService();
   final HostListingsService _listingsService = HostListingsService();
   final HostBookingsService _bookingsService = HostBookingsService();
@@ -54,18 +85,35 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
   void initState() {
     super.initState();
     _refreshDashboard();
+    // Same reasoning as the guest HomeScreen: don't leave a host
+    // stuck on a failed dashboard load just because they were
+    // offline (or their clock hadn't finished syncing right after
+    // reconnecting) - reload automatically once we're back online.
+    startAutoReloadOnReconnect();
   }
 
   void _refreshDashboard() {
     setState(() {
-      _dashboardFuture = Future.wait([
-        _listingsService.getMyListings(),
-        _bookingsService.getBookingsForMyListings(),
-      ]).then((results) => _HostDashboardData(
-            listings: results[0] as List<Place>,
-            bookings: results[1] as List<HostBooking>,
-          ));
+      // Wrapped in withRetry so a transient clock-skew failure right
+      // after reconnecting (PGRST303) resolves itself instead of
+      // making the host manually pull-to-refresh.
+      _dashboardFuture = withRetry(() => Future.wait([
+            _listingsService.getMyListings(),
+            _bookingsService.getBookingsForMyListings(),
+          ]).then((results) => _HostDashboardData(
+                listings: results[0] as List<Place>,
+                bookings: results[1] as List<HostBooking>,
+              )));
     });
+  }
+
+  @override
+  void onReconnected() => _refreshDashboard();
+
+  @override
+  void dispose() {
+    disposeAutoReloadOnReconnect();
+    super.dispose();
   }
 
   void _openProfile() {
@@ -119,6 +167,8 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
                   _buildStatsRow(listings, bookings),
                   const SizedBox(height: 28),
                   _buildAddListingCard(),
+                  const SizedBox(height: 16),
+                  _buildBookingUpdatesCard(bookings),
                   const SizedBox(height: 28),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -511,6 +561,188 @@ class _HostHomeScreenState extends State<HostHomeScreen> {
             child: const Text('Add a Listing'),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Cancellations and reschedules guests made in the last 14 days,
+  /// across every listing this host owns - newest first. Built from
+  /// data already fetched for the dashboard (no extra network call).
+  List<_BookingUpdate> _recentBookingUpdates(List<HostBooking> bookings) {
+    final cutoff = DateTime.now().subtract(const Duration(days: 14));
+    final updates = <_BookingUpdate>[];
+    for (final hb in bookings) {
+      final b = hb.booking;
+      final cancelledAt = b.cancelledAt;
+      if (cancelledAt != null && cancelledAt.isAfter(cutoff)) {
+        updates.add(_BookingUpdate(
+          type: _BookingUpdateType.cancelled,
+          guestName: hb.guestName,
+          placeTitle: b.placeTitle,
+          when: cancelledAt,
+        ));
+      }
+      final rescheduledAt = b.rescheduledAt;
+      if (rescheduledAt != null && rescheduledAt.isAfter(cutoff)) {
+        updates.add(_BookingUpdate(
+          type: _BookingUpdateType.rescheduled,
+          guestName: hb.guestName,
+          placeTitle: b.placeTitle,
+          when: rescheduledAt,
+          previousCheckIn: b.previousCheckIn,
+          previousCheckOut: b.previousCheckOut,
+          newCheckIn: b.checkIn,
+          newCheckOut: b.checkOut,
+        ));
+      }
+    }
+    updates.sort((a, b) => b.when.compareTo(a.when));
+    return updates;
+  }
+
+  String _fmtShort(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${d.day} ${months[d.month - 1]}';
+  }
+
+  String _describeUpdate(_BookingUpdate update) {
+    switch (update.type) {
+      case _BookingUpdateType.cancelled:
+        return '${update.guestName} cancelled their stay at '
+            '${update.placeTitle}.';
+      case _BookingUpdateType.rescheduled:
+        final newIn = update.newCheckIn;
+        final newOut = update.newCheckOut;
+        final newDates = (newIn != null && newOut != null)
+            ? ' New dates: ${_fmtShort(newIn)} - ${_fmtShort(newOut)}.'
+            : '';
+        return '${update.guestName} rescheduled their stay at '
+            '${update.placeTitle}.$newDates';
+    }
+  }
+
+  /// Same visual style as [_buildAddListingCard] ("List your place on
+  /// Homely") so the two read as a pair, but dark instead of primary
+  /// so the two don't get confused for the same action. Tapping it,
+  /// like "Manage all" / "View all" elsewhere on this screen, opens
+  /// [HostBookingsScreen] - guests can cancel or reschedule from
+  /// their own MyBookingsScreen at any time, so this is where a host
+  /// goes to see the full picture and act on it.
+  Widget _buildBookingUpdatesCard(List<HostBooking> bookings) {
+    final updates = _recentBookingUpdates(bookings);
+    final hasUpdates = updates.isNotEmpty;
+    return GestureDetector(
+      onTap: _viewAllBookings,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.dark,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.history_toggle_off_rounded,
+                    color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Booking updates',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (hasUpdates)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${updates.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              hasUpdates
+                  ? 'Guests have cancelled or rescheduled on your listings '
+                      'in the last 14 days.'
+                  : "You'll see it here when a guest cancels or reschedules "
+                      'a booking on one of your listings.',
+              style: const TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            if (hasUpdates) ...[
+              const SizedBox(height: 14),
+              ...updates.take(2).map(
+                    (u) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            u.type == _BookingUpdateType.cancelled
+                                ? Icons.cancel_outlined
+                                : Icons.event_repeat_rounded,
+                            color: Colors.white70,
+                            size: 15,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _describeUpdate(u),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12.5,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              if (updates.length > 2)
+                Text(
+                  '+${updates.length - 2} more',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text(
+                  hasUpdates ? 'View all bookings' : 'Go to your bookings',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_forward_rounded,
+                    color: Colors.white, size: 16),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

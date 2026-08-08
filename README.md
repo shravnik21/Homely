@@ -102,12 +102,3 @@ All tables use **Row Level Security**: listings (`places`, `cities`) are publicl
    schema_bookings.sql
    ```
 
-4. **Run the app**
-   ```bash
-   flutter run
-   ```
-
-## Notes
-
-- Keep `.env` out of version control — it contains your Supabase credentials.
-- Sample listings in `seed_places.sql` cover Mumbai, Pune, Goa, Lonavala, and Alibaug.

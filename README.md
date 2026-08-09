@@ -75,30 +75,3 @@ All tables use **Row Level Security**: listings (`places`, `cities`) are publicl
 
 ## Getting Started
 
-### Setup
-
-1. **Clone the repo and install dependencies**
-   ```bash
-   git clone <repo-url>
-   cd homely_app
-   flutter pub get
-   ```
-
-2. **Configure environment variables**
-
-   Create a `.env` file in the project root:
-   ```
-   SUPABASE_URL=your_supabase_project_url
-   SUPABASE_ANON_KEY=your_supabase_anon_key
-   ```
-
-3. **Set up the database**
-
-   In the Supabase SQL Editor, run the scripts in `supabase/` in order:
-   ```
-   setup.sql
-   schema_places.sql
-   seed_places.sql
-   schema_bookings.sql
-   ```
-

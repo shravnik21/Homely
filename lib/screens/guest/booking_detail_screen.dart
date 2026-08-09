@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/booking.dart';
 import 'package:homely_app/services/booking_service.dart';
 import 'package:homely_app/services/cancellation_policy.dart';
-import 'package:homely_app/widgets/availability_date_range_sheet.dart';
 
 /// Full-detail view for a single booking, opened by tapping a card on
 /// [MyBookingsScreen]. Mirrors the layout of [BookingConfirmationScreen]
@@ -459,22 +459,111 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     );
   }
 
-  // ---- Reschedule: same shared availability calendar the initial
+  // ---- Reschedule: same curved-calendar bottom sheet the initial
   // booking flow uses on [BookingScreen], pre-seeded with the
-  // existing dates and excluding this booking's own current dates
-  // from the "already booked" set (see AvailabilityService) ----
+  // existing dates ----
   Future<void> _openReschedulePicker() async {
-    final range = await showAvailabilityDatePicker(
+    DateTime? tempStart = _booking.checkIn;
+    DateTime? tempEnd = _booking.checkOut;
+
+    await showModalBottomSheet(
       context: context,
-      placeId: _booking.placeId,
-      title: 'Reschedule dates',
-      saveLabel: 'Save new dates',
-      initialStart: _booking.checkIn,
-      initialEnd: _booking.checkOut,
-      excludeBookingId: _booking.id,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: AppColors.lightGrey,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Reschedule dates',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.dark,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TableCalendar(
+                      firstDay: DateTime.now(),
+                      lastDay: DateTime.now().add(const Duration(days: 365)),
+                      focusedDay: tempStart ?? DateTime.now(),
+                      rangeStartDay: tempStart,
+                      rangeEndDay: tempEnd,
+                      rangeSelectionMode: RangeSelectionMode.toggledOn,
+                      calendarFormat: CalendarFormat.month,
+                      headerStyle: const HeaderStyle(
+                        formatButtonVisible: false,
+                        titleCentered: true,
+                        titleTextStyle: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      calendarStyle: const CalendarStyle(
+                        rangeStartDecoration: BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        rangeEndDecoration: BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        withinRangeDecoration: BoxDecoration(
+                          color: Color(0x22FF385C),
+                          shape: BoxShape.circle,
+                        ),
+                        todayDecoration: BoxDecoration(
+                          color: AppColors.lightGrey,
+                          shape: BoxShape.circle,
+                        ),
+                        todayTextStyle: TextStyle(color: AppColors.dark),
+                      ),
+                      onRangeSelected: (start, end, focusedDay) {
+                        setSheetState(() {
+                          tempStart = start;
+                          tempEnd = end;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: (tempStart != null && tempEnd != null)
+                            ? () {
+                                Navigator.of(sheetContext).pop();
+                                _submitReschedule(tempStart!, tempEnd!);
+                              }
+                            : null,
+                        child: const Text('Save new dates'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
-    if (range == null) return;
-    await _submitReschedule(range.start, range.end);
   }
 
   Future<void> _submitReschedule(DateTime newCheckIn, DateTime newCheckOut) async {
@@ -529,17 +618,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      // Same reasoning as BookingScreen's _confirmBooking: a
-      // BookingConflictException means the DB's
-      // no_overlapping_bookings constraint caught someone else
-      // taking these dates first. _booking is left untouched here
-      // (we never got to the setState above), so the user just sees
-      // their original dates again and can reopen the picker.
-      final isConflict = e is BookingConflictException;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(isConflict ? e.toString() : 'Could not reschedule: $e'),
+          content: Text('Could not reschedule: $e'),
           backgroundColor: AppColors.error,
         ),
       );

@@ -257,7 +257,7 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildCancellationPolicy() {
-    final freeDays = CancellationPolicy.fullRefundThresholdDays;
+   final  freeDays = CancellationPolicy.fullRefundThresholdDays;
     final noRefundDays = CancellationPolicy.noRefundThresholdDays;
     final partialPct = (CancellationPolicy.partialRefundFeeRate * 100).round();
     return Container(

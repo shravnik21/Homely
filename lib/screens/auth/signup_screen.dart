@@ -7,6 +7,7 @@ import 'package:homely_app/widgets/primary_button.dart';
 import 'package:homely_app/screens/guest/home_screen.dart';
 import 'package:homely_app/screens/host/host_onboarding_screen.dart';
 import 'package:homely_app/widgets/role_toggle.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -76,7 +77,7 @@ class _SignupScreenState extends State<SignupScreen> {
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (e) {
-      _showError('Something went wrong. Please try again.');
+      _showError(isNetworkError(e) ? noInternetMessage : 'Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

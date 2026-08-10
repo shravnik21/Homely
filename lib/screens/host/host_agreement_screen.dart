@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/host_service.dart';
 import 'package:homely_app/widgets/primary_button.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 const _agreementText = '''
 Homely Host Agreement (Demo)
@@ -57,7 +58,7 @@ class _HostAgreementScreenState extends State<HostAgreementScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not save: $e'),
+          content: Text(friendlyError(e, fallback: 'Could not save.')),
           backgroundColor: AppColors.error,
         ),
       );

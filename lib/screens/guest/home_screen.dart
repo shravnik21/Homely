@@ -7,6 +7,7 @@ import 'package:homely_app/services/wishlist_service.dart';
 import 'package:homely_app/utils/auto_reload_on_reconnect.dart';
 import 'package:homely_app/utils/network_retry.dart';
 import 'package:homely_app/widgets/place_card.dart';
+import 'package:homely_app/widgets/error_state_view.dart';
 import 'place_detail_screen.dart';
 import 'profile_screen.dart';
 import 'wishlist_screen.dart';
@@ -286,15 +287,10 @@ class _HomeScreenState extends State<HomeScreen>
 
         // 2. Network call failed (no internet, RLS blocking, etc.)
         if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Could not load places.\n${snapshot.error}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.error),
-              ),
-            ),
+          return ErrorStateView(
+            error: snapshot.error!,
+            fallbackMessage: 'Could not load places.',
+            onRetry: _loadPlaces,
           );
         }
 

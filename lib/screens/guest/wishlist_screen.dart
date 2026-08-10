@@ -3,6 +3,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/wishlist_service.dart';
 import 'package:homely_app/widgets/place_card.dart';
+import 'package:homely_app/widgets/error_state_view.dart';
 import 'place_detail_screen.dart';
 
 class WishlistScreen extends StatefulWidget {
@@ -24,6 +25,10 @@ class _WishlistScreenState extends State<WishlistScreen> {
   void initState() {
     super.initState();
     _wishlistFuture = _loadWishlist();
+  }
+
+  void _refresh() {
+    setState(() => _wishlistFuture = _loadWishlist());
   }
 
   Future<List<Place>> _loadWishlist() async {
@@ -78,15 +83,10 @@ class _WishlistScreenState extends State<WishlistScreen> {
             }
 
             if (snapshot.hasError) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'Could not load your wishlist.\n${snapshot.error}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.error),
-                  ),
-                ),
+              return ErrorStateView(
+                error: snapshot.error!,
+                fallbackMessage: 'Could not load your wishlist.',
+                onRetry: _refresh,
               );
             }
 

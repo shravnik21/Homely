@@ -4,6 +4,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/host_booking.dart';
 import 'package:homely_app/services/host_bookings_service.dart';
 import 'package:homely_app/screens/host/host_booking_detail_screen.dart';
+import 'package:homely_app/widgets/error_state_view.dart';
 
 /// Full list of bookings across every listing the host owns, opened
 /// from the "View all" link on [HostHomeScreen]'s Recent Bookings
@@ -95,15 +96,10 @@ class _HostBookingsScreenState extends State<HostBookingsScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (snapshot.hasError) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'Could not load bookings.\n${snapshot.error}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppColors.error),
-                    ),
-                  ),
+                return ErrorStateView(
+                  error: snapshot.error!,
+                  fallbackMessage: 'Could not load bookings.',
+                  onRetry: _refresh,
                 );
               }
 

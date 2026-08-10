@@ -7,6 +7,7 @@ import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/listing_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 const List<String> kPropertyTypes = [
   'villa',
@@ -178,7 +179,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       try {
         await _persistStep(0);
       } catch (e) {
-        if (mounted) setState(() => _stepError = 'Could not save: $e');
+        if (mounted) setState(() => _stepError = friendlyError(e, fallback: 'Could not save this step.'));
         return;
       } finally {
         if (mounted) setState(() => _isBusy = false);
@@ -193,7 +194,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       _persistStep(_currentStep).catchError((e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not save this step: $e')),
+            SnackBar(content: Text(friendlyError(e, fallback: 'Could not save this step.'))),
           );
         }
       });
@@ -339,7 +340,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save draft: $e')),
+          SnackBar(content: Text(friendlyError(e, fallback: 'Could not save draft.'))),
         );
       }
     } finally {
@@ -386,7 +387,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       );
       Navigator.of(context).pop(true);
     } catch (e) {
-      if (mounted) setState(() => _stepError = 'Could not publish: $e');
+      if (mounted) setState(() => _stepError = friendlyError(e, fallback: 'Could not publish this listing.'));
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
@@ -407,7 +408,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save: $e')),
+          SnackBar(content: Text(friendlyError(e, fallback: 'Could not save.'))),
         );
       }
     } finally {
@@ -439,7 +440,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       if (!mounted) return;
       setState(() => _photos.remove(photo));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $e')),
+        SnackBar(content: Text(friendlyError(e, fallback: 'Upload failed.'))),
       );
     }
   }

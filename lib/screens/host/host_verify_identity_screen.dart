@@ -5,6 +5,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/host_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 class HostVerifyIdentityScreen extends StatefulWidget {
   const HostVerifyIdentityScreen({super.key});
@@ -101,7 +102,7 @@ class _HostVerifyIdentityScreenState extends State<HostVerifyIdentityScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isVerifyingOtp = false);
-      _showSnack('Could not verify: $e', isError: true);
+      _showSnack(friendlyError(e, fallback: 'Could not verify.'), isError: true);
     }
   }
 
@@ -129,7 +130,7 @@ class _HostVerifyIdentityScreenState extends State<HostVerifyIdentityScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isUploadingId = false);
-      _showSnack('Upload failed: $e', isError: true);
+      _showSnack(friendlyError(e, fallback: 'Upload failed.'), isError: true);
     }
   }
 

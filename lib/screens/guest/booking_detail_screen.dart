@@ -5,6 +5,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/booking.dart';
 import 'package:homely_app/services/booking_service.dart';
 import 'package:homely_app/services/cancellation_policy.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 /// Full-detail view for a single booking, opened by tapping a card on
 /// [MyBookingsScreen]. Mirrors the layout of [BookingConfirmationScreen]
@@ -620,7 +621,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not reschedule: $e'),
+          content: Text(friendlyError(e, fallback: 'Could not reschedule.')),
           backgroundColor: AppColors.error,
         ),
       );
@@ -709,7 +710,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not cancel: $e'),
+          content: Text(friendlyError(e, fallback: 'Could not cancel.')),
           backgroundColor: AppColors.error,
         ),
       );

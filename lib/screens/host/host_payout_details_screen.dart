@@ -3,6 +3,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/host_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 class HostPayoutDetailsScreen extends StatefulWidget {
   const HostPayoutDetailsScreen({super.key});
@@ -78,7 +79,7 @@ class _HostPayoutDetailsScreenState extends State<HostPayoutDetailsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not save: $e'),
+          content: Text(friendlyError(e, fallback: 'Could not save.')),
           backgroundColor: AppColors.error,
         ),
       );

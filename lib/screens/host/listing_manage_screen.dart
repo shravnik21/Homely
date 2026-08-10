@@ -4,6 +4,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/listing_service.dart';
 import 'package:homely_app/screens/host/listing_wizard_screen.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 /// Detail/management view for one listing a host already created:
 /// edit (reopens the wizard prefilled), pause/unpause (hide it from
@@ -56,7 +57,7 @@ class _ListingManageScreenState extends State<ListingManageScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update listing: $e')),
+          SnackBar(content: Text(friendlyError(e, fallback: 'Could not update this listing.'))),
         );
       }
     } finally {
@@ -99,7 +100,7 @@ class _ListingManageScreenState extends State<ListingManageScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not delete listing: $e')),
+          SnackBar(content: Text(friendlyError(e, fallback: 'Could not delete this listing.'))),
         );
       }
     } finally {

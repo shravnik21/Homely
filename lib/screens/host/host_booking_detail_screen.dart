@@ -5,6 +5,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/booking.dart';
 import 'package:homely_app/models/host_booking.dart';
 import 'package:homely_app/services/host_bookings_service.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 /// Full-detail view for a single booking, opened by tapping a booking
 /// card on [HostHomeScreen]'s "Recent Bookings" preview or on
@@ -89,7 +90,7 @@ class _HostBookingDetailScreenState extends State<HostBookingDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not save note: $e'),
+          content: Text(friendlyError(e, fallback: 'Could not save note.')),
           backgroundColor: AppColors.error,
         ),
       );

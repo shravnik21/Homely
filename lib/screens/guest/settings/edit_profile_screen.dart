@@ -3,6 +3,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -75,7 +76,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not update profile: $e'),
+          content: Text(friendlyError(e, fallback: 'Could not update profile.')),
           backgroundColor: AppColors.error,
         ),
       );

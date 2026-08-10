@@ -5,6 +5,7 @@ import 'package:homely_app/services/booking_service.dart';
 import 'package:homely_app/services/cancellation_policy.dart';
 import 'package:homely_app/screens/guest/booking_confirmation_screen.dart';
 import 'package:homely_app/widgets/availability_date_range_sheet.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 class BookingScreen extends StatefulWidget {
   final Place place;
@@ -89,7 +90,7 @@ class _BookingScreenState extends State<BookingScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isConflict ? e.toString() : 'Booking failed: $e'),
+          content: Text(isConflict ? e.toString() : friendlyError(e, fallback: 'Booking failed.')),
           backgroundColor: AppColors.error,
         ),
       );

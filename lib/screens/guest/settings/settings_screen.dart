@@ -3,6 +3,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/screens/auth/login_screen.dart';
 import 'package:homely_app/screens/guest/settings/edit_profile_screen.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -65,7 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not send reset link: $e'),
+          content: Text(friendlyError(e, fallback: 'Could not send reset link.')),
           backgroundColor: AppColors.error,
         ),
       );

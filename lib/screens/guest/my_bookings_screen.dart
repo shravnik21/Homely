@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/booking.dart';
 import 'package:homely_app/services/booking_service.dart';
+import 'package:homely_app/widgets/error_state_view.dart';
 import 'booking_detail_screen.dart';
 
 class MyBookingsScreen extends StatefulWidget {
@@ -84,15 +85,10 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'Could not load bookings.\n${snapshot.error}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.error),
-                  ),
-                ),
+              return ErrorStateView(
+                error: snapshot.error!,
+                fallbackMessage: 'Could not load bookings.',
+                onRetry: _refreshBookings,
               );
             }
 

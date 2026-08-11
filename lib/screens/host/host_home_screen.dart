@@ -183,38 +183,8 @@ class _HostHomeScreenState extends State<HostHomeScreen>
                   _buildAddListingCard(),
                   const SizedBox(height: 16),
                   _buildBookingUpdatesCard(bookings),
-                  const SizedBox(height: 28),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Your Listings',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.dark,
-                        ),
-                      ),
-                      if (listings.isNotEmpty)
-                        TextButton(
-                          onPressed: _manageListings,
-                          child: const Text('Manage all'),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (isLoading)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (listings.isEmpty)
-                    _buildEmptyListingsState()
-                  else
-                    ...listings
-                        .take(3)
-                        .map((p) => _buildListingRow(p))
-                        ,
+                  const SizedBox(height: 16),
+                  _buildViewListingsCard(),
                   const SizedBox(height: 28),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -372,79 +342,6 @@ class _HostHomeScreenState extends State<HostHomeScreen>
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildListingRow(Place place) {
-    late final Color statusColor;
-    late final String statusLabel;
-    switch (place.status) {
-      case 'draft':
-        statusColor = AppColors.grey;
-        statusLabel = 'Draft';
-        break;
-      case 'paused':
-        statusColor = Colors.orange[700]!;
-        statusLabel = 'Paused';
-        break;
-      default:
-        statusColor = Colors.green[700]!;
-        statusLabel = 'Active';
-    }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: GestureDetector(
-        onTap: _manageListings,
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.lightGrey,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: place.photoUrls.isEmpty
-                    ? Container(
-                        width: 52,
-                        height: 52,
-                        color: AppColors.white,
-                        child: const Icon(Icons.image_not_supported_outlined,
-                            size: 20, color: AppColors.grey),
-                      )
-                    : CachedNetworkImage(
-                        imageUrl: place.coverImage,
-                        width: 52,
-                        height: 52,
-                        fit: BoxFit.cover,
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  place.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: TextStyle(
-                      fontSize: 10.5, fontWeight: FontWeight.w700, color: statusColor),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -791,18 +688,46 @@ class _HostHomeScreenState extends State<HostHomeScreen>
     );
   }
 
-  Widget _buildEmptyListingsState() {
+  /// Same visual style as [_buildAddListingCard] ("List your place on
+  /// Homely") so the two read as a pair. Replaces the old "Manage all"
+  /// text button - tapping the button here opens [MyListingsScreen],
+  /// same destination as before.
+  Widget _buildViewListingsCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 28),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.lightGrey,
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(18),
       ),
-      alignment: Alignment.center,
-      child: const Text(
-        "You haven't added any listings yet.",
-        style: TextStyle(color: AppColors.grey, fontSize: 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Your Listings',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'View and manage all your listings, including active, paused '
+            'and draft ones.',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.primary,
+              minimumSize: const Size(double.infinity, 46),
+            ),
+            onPressed: _manageListings,
+            child: const Text('Show your listings'),
+          ),
+        ],
       ),
     );
   }

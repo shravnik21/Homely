@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/models/host_booking.dart';
+import 'package:homely_app/models/earnings_summary.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/services/host_listings_service.dart';
 import 'package:homely_app/services/host_bookings_service.dart';
@@ -10,7 +11,9 @@ import 'package:homely_app/screens/host/host_profile_screen.dart';
 import 'package:homely_app/screens/host/listing_wizard_screen.dart';
 import 'package:homely_app/screens/host/my_listings_screen.dart';
 import 'package:homely_app/screens/host/host_bookings_screen.dart';
+import 'package:homely_app/screens/host/host_earnings_screen.dart';
 import 'package:homely_app/utils/auto_reload_on_reconnect.dart';
+import 'package:homely_app/utils/currency_format.dart';
 import 'package:homely_app/utils/network_retry.dart';
 
 /// Everything the Host Home dashboard needs, fetched together so the
@@ -133,6 +136,17 @@ class _HostHomeScreenState extends State<HostHomeScreen>
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const MyListingsScreen()),
     );
+    _refreshDashboard();
+  }
+
+  Future<void> _openEarnings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const HostEarningsScreen()),
+    );
+    // Setting up payout details or drilling into a booking from
+    // there can't change these numbers, but a stay could tip from
+    // "upcoming" to "paid out" while the host was looking, so refresh
+    // for the same reason _viewAllBookings does below.
     _refreshDashboard();
   }
 
@@ -484,6 +498,11 @@ class _HostHomeScreenState extends State<HostHomeScreen>
 
   Widget _buildStatsRow(List<Place> listings, List<HostBooking> bookings) {
     final activeCount = listings.where((p) => p.isActive).length;
+    // Same numbers HostEarningsScreen shows in full - paid-out stays
+    // and cancellation compensation, plus what's still upcoming.
+    // Computed from data already fetched for this dashboard, so this
+    // stat is free (no extra network round trip).
+    final earnings = EarningsSummary.fromBookings(bookings);
     return Row(
       children: [
         Expanded(
@@ -494,34 +513,59 @@ class _HostHomeScreenState extends State<HostHomeScreen>
           child: _buildStatCard(label: 'Bookings', value: '${bookings.length}'),
         ),
         const SizedBox(width: 12),
-        Expanded(child: _buildStatCard(label: 'Earnings', value: '₹0')),
+        Expanded(
+          child: _buildStatCard(
+            label: 'Earnings',
+            value: formatInr(earnings.totalNet),
+            onTap: _openEarnings,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildStatCard({required String label, required String value}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      decoration: BoxDecoration(
-        color: AppColors.lightGrey,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.dark,
+  Widget _buildStatCard({
+    required String label,
+    required String value,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.lightGrey,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.dark,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: AppColors.grey),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 12, color: AppColors.grey),
+                ),
+                if (onTap != null) ...[
+                  const SizedBox(width: 2),
+                  const Icon(Icons.chevron_right,
+                      size: 14, color: AppColors.grey),
+                ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

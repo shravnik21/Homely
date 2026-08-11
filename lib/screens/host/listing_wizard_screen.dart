@@ -40,7 +40,7 @@ const List<String> kAmenityOptions = [
   'Dining Area',
 ];
 
-const int kMinPhotosToPublish = 3;
+const int kMinPhotosToPublish = Place.kMinPhotosToPublish;
 
 /// One photo in the wizard's in-memory list. Either a freshly-picked
 /// local file already uploaded to Storage (uploadedUrl set as soon as
@@ -98,7 +98,14 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   List<Map<String, dynamic>> _cities = [];
   String? _cityId;
   String? _cityName;
-  final _addressController = TextEditingController();
+  // Address is collected as separate, Airbnb-style fields for a much
+  // clearer entry experience, then joined into a single string right
+  // before it's saved - the `address` column in the DB stays exactly
+  // as it was, no schema change needed.
+  final _flatController = TextEditingController(); // Flat/House no., Building/Society
+  final _streetController = TextEditingController(); // Street / Area / Locality
+  final _landmarkController = TextEditingController(); // optional
+  final _pincodeController = TextEditingController(); // optional
 
   final _titleController = TextEditingController();
   int _bedrooms = 1;
@@ -128,7 +135,12 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     _type = place.type;
     _cityId = place.cityId;
     _cityName = place.cityName.isEmpty ? null : place.cityName;
-    _addressController.text = place.address;
+    // The DB only ever stored one joined address string, so there are
+    // no separate components to recover here - drop the saved value
+    // into the Street / Area field as a sensible best-effort default
+    // and let the host redistribute it across the new fields if they
+    // want to; nothing is lost, it's just no longer pre-split.
+    _streetController.text = place.address;
     _titleController.text =
         place.title == 'Untitled listing' ? '' : place.title;
     _bedrooms = place.bedrooms;
@@ -144,6 +156,22 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     }
   }
 
+  /// Joins the separate address fields into the single string that
+  /// actually gets saved to the `address` column - e.g. "Flat 302,
+  /// Sunrise Apartments, MG Road, Calangute, near Baga Beach, 403516".
+  /// Empty optional fields are simply skipped rather than leaving
+  /// stray commas.
+  String _buildAddress() {
+    final landmark = _landmarkController.text.trim();
+    final parts = [
+      _flatController.text.trim(),
+      _streetController.text.trim(),
+      if (landmark.isNotEmpty) 'near $landmark',
+      _pincodeController.text.trim(),
+    ].where((s) => s.isNotEmpty);
+    return parts.join(', ');
+  }
+
   Future<void> _loadCities() async {
     final cities = await _listingService.getCities();
     if (mounted) setState(() => _cities = cities);
@@ -152,7 +180,10 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   @override
   void dispose() {
     _pageController.dispose();
-    _addressController.dispose();
+    _flatController.dispose();
+    _streetController.dispose();
+    _landmarkController.dispose();
+    _pincodeController.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
@@ -237,8 +268,8 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
         return null;
       case 1:
         if (_cityId == null) return 'Please select a city to continue';
-        if (_addressController.text.trim().isEmpty) {
-          return 'Please enter an address to continue';
+        if (_streetController.text.trim().isEmpty) {
+          return 'Please enter a street / area to continue';
         }
         return null;
       case 2:
@@ -287,7 +318,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       case 1:
         await _listingService.updateListing(_placeId!, {
           'city_id': _cityId,
-          'address': _addressController.text.trim(),
+          'address': _buildAddress(),
         });
         break;
       case 2:
@@ -349,18 +380,32 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   }
 
   Future<void> _publish() async {
-    final missing = <String>[];
-    if (_titleController.text.trim().isEmpty) missing.add('a title');
-    if (_cityId == null) missing.add('a city');
-    if (_addressController.text.trim().isEmpty) missing.add('an address');
-    if (_descriptionController.text.trim().isEmpty) missing.add('a description');
-    if ((num.tryParse(_priceController.text.trim()) ?? 0) <= 0) {
-      missing.add('a nightly price');
-    }
-    final photoCount = _photos.where((p) => p.uploadedUrl != null).length;
-    if (photoCount < kMinPhotosToPublish) {
-      missing.add('at least $kMinPhotosToPublish photos');
-    }
+    // Build a snapshot of the live form state and run it through the
+    // exact same completeness check ListingManageScreen's shortcut
+    // Publish button uses (Place.missingRequirementsForPublish) -
+    // one shared definition of "ready to publish" so a listing can
+    // never be published from either screen with a step left
+    // unfinished.
+    final draftSnapshot = Place(
+      id: _placeId ?? '',
+      cityId: _cityId,
+      cityName: _cityName ?? '',
+      title: _titleController.text.trim(),
+      type: _type ?? '',
+      pricePerNight: num.tryParse(_priceController.text.trim()) ?? 0,
+      maxGuests: _maxGuests,
+      bedrooms: _bedrooms,
+      bathrooms: _bathrooms,
+      address: _buildAddress(),
+      description: _descriptionController.text.trim(),
+      amenities: _amenities.toList(),
+      photoUrls: _photos
+          .where((p) => p.uploadedUrl != null)
+          .map((p) => p.uploadedUrl!)
+          .toList(),
+      houseRules: _houseRulesController.text.trim(),
+    );
+    final missing = Place.missingRequirementsForPublish(draftSnapshot);
 
     if (missing.isNotEmpty) {
       setState(() =>
@@ -666,10 +711,38 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
             }).toList(),
           ),
           const SizedBox(height: 20),
+          const Text('Address',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          const SizedBox(height: 4),
+          const Text(
+            'Only the street/area is required - the rest help guests find '
+            'the place but can be added later.',
+            style: TextStyle(color: AppColors.grey, fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 12),
           CustomTextField(
-            controller: _addressController,
-            label: 'Address / area',
-            hint: 'e.g. Calangute, near the beach road',
+            controller: _flatController,
+            label: 'Flat / House no., Building',
+            hint: 'e.g. Flat 302, Sunrise Apartments',
+          ),
+          const SizedBox(height: 16),
+          CustomTextField(
+            controller: _streetController,
+            label: 'Street / Area / Locality',
+            hint: 'e.g. MG Road, Calangute',
+          ),
+          const SizedBox(height: 16),
+          CustomTextField(
+            controller: _landmarkController,
+            label: 'Landmark (optional)',
+            hint: 'e.g. Near Baga Beach',
+          ),
+          const SizedBox(height: 16),
+          CustomTextField(
+            controller: _pincodeController,
+            label: 'Pincode (optional)',
+            hint: 'e.g. 403516',
+            keyboardType: TextInputType.number,
           ),
         ],
       ),
@@ -1022,9 +1095,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
               ? '—'
               : _titleController.text.trim()),
           row('City', _cityName ?? '—'),
-          row('Address', _addressController.text.trim().isEmpty
-              ? '—'
-              : _addressController.text.trim()),
+          row('Address', _buildAddress().isEmpty ? '—' : _buildAddress()),
           row('Beds / Baths', '$_bedrooms / $_bathrooms'),
           row('Max guests', '$_maxGuests'),
           row('Price', _priceController.text.trim().isEmpty

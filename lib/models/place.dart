@@ -50,6 +50,41 @@ class Place {
   bool get isPaused => status == 'paused';
   bool get isActive => status == 'published';
 
+  /// Minimum photos required before a listing can be published -
+  /// shared by the wizard's Review step and the shortcut "Publish
+  /// Listing" action on ListingManageScreen, so both enforce the same
+  /// bar.
+  static const int kMinPhotosToPublish = 3;
+
+  /// Everything still missing before this listing can go from draft
+  /// to published, worded for direct display to the host (e.g.
+  /// "Before publishing, please add: a title, at least 3 photos.").
+  /// Empty list means it's ready. Mirrors every required field across
+  /// every step of ListingWizardScreen - a title, city, address,
+  /// description, nightly price, minimum photos, at least one
+  /// amenity, and house rules - so a listing can never be published
+  /// with a page left unfinished, whether that's checked from inside
+  /// the wizard's Review step or from the listing's Manage screen
+  /// directly.
+  static List<String> missingRequirementsForPublish(Place place) {
+    final missing = <String>[];
+    if (place.title.trim().isEmpty || place.title == 'Untitled listing') {
+      missing.add('a title');
+    }
+    if (place.cityId == null) missing.add('a city');
+    if (place.address.trim().isEmpty) missing.add('an address');
+    if (place.description.trim().isEmpty) missing.add('a description');
+    if (place.pricePerNight <= 0) missing.add('a nightly price');
+    if (place.photoUrls.length < kMinPhotosToPublish) {
+      missing.add('at least $kMinPhotosToPublish photos');
+    }
+    if (place.amenities.isEmpty) missing.add('at least one amenity');
+    if ((place.houseRules ?? '').trim().isEmpty) missing.add('house rules');
+    return missing;
+  }
+
+  bool get isReadyToPublish => missingRequirementsForPublish(this).isEmpty;
+
 
   /// The first photo, used as the card thumbnail. Falls back to a
   /// placeholder if a place somehow has no images yet.

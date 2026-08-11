@@ -65,6 +65,55 @@ class _ListingManageScreenState extends State<ListingManageScreen> {
     }
   }
 
+  Future<void> _publish() async {
+    final missing = Place.missingRequirementsForPublish(_place);
+    if (missing.isNotEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Almost there'),
+          content: Text(
+            'Before publishing, this listing still needs: ${missing.join(', ')}.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _edit();
+              },
+              child: const Text('Complete Listing'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isBusy = true);
+    try {
+      await _listingService.publishListing(_place.id);
+      _changed = true;
+      await _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Listing published!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyError(e, fallback: 'Could not publish this listing.'))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
   Future<void> _delete() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -207,6 +256,20 @@ class _ListingManageScreenState extends State<ListingManageScreen> {
                 isBusy: _isBusy,
               ),
               const SizedBox(height: 10),
+              if (_place.status == 'draft') ...[
+                _actionTile(
+                  icon: Icons.publish_outlined,
+                  label: 'Publish Listing',
+                  subtitle: _place.isReadyToPublish
+                      ? 'Make this listing visible to guests.'
+                      : "You'll need to finish a few required fields first.",
+                  iconColor: AppColors.primary,
+                  labelColor: AppColors.primary,
+                  onTap: _publish,
+                  isBusy: _isBusy,
+                ),
+                const SizedBox(height: 10),
+              ],
               _actionTile(
                 icon: Icons.delete_outline,
                 label: 'Delete Listing',

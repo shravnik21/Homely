@@ -5,6 +5,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/booking.dart';
 import 'package:homely_app/models/host_booking.dart';
 import 'package:homely_app/services/host_bookings_service.dart';
+import 'package:homely_app/services/payout_policy.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
 
 /// Full-detail view for a single booking, opened by tapping a booking
@@ -448,13 +449,23 @@ class _HostBookingDetailScreenState extends State<HostBookingDetailScreen> {
   // a host is never compensated for more than the booking was
   // actually worth).
   Widget _buildPayoutBreakdown(Booking booking) {
-    final subtotal = booking.pricePerNight * booking.nights;
-    final serviceFee = booking.totalPrice - subtotal;
+    final subtotal = PayoutPolicy.stayPayout(
+      pricePerNight: booking.pricePerNight,
+      nights: booking.nights,
+      totalPrice: booking.totalPrice,
+    );
+    final serviceFee = PayoutPolicy.guestServiceFeeFor(
+      totalPrice: booking.totalPrice,
+      stayPayout: subtotal,
+    );
     final cancelled = booking.status == 'cancelled';
     final fee = booking.cancellationFee;
 
     if (cancelled && fee != null) {
-      final compensation = fee < subtotal ? fee : subtotal;
+      final compensation = PayoutPolicy.cancellationCompensation(
+        cancellationFee: fee,
+        stayPayout: subtotal,
+      );
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(

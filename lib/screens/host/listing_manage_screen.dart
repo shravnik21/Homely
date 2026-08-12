@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
+import 'package:homely_app/models/review.dart';
 import 'package:homely_app/services/listing_service.dart';
+import 'package:homely_app/services/review_service.dart';
 import 'package:homely_app/screens/host/listing_wizard_screen.dart';
+import 'package:homely_app/screens/host/listing_reviews_screen.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
 
 /// Detail/management view for one listing a host already created:
@@ -19,14 +22,29 @@ class ListingManageScreen extends StatefulWidget {
 
 class _ListingManageScreenState extends State<ListingManageScreen> {
   final ListingService _listingService = ListingService();
+  final ReviewService _reviewService = ReviewService();
   late Place _place;
   bool _isBusy = false;
   bool _changed = false;
+  late Future<RatingSummary> _ratingFuture;
 
   @override
   void initState() {
     super.initState();
     _place = widget.place;
+    _loadRating();
+  }
+
+  void _loadRating() {
+    _ratingFuture = _reviewService
+        .getReviewsForPlace(_place.id)
+        .then((reviews) => RatingSummary.fromReviews(reviews));
+  }
+
+  Future<void> _openReviews() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ListingReviewsScreen(place: _place)),
+    );
   }
 
   Future<void> _refresh() async {
@@ -240,6 +258,8 @@ class _ListingManageScreenState extends State<ListingManageScreen> {
                 onTap: _edit,
               ),
               const SizedBox(height: 10),
+              _buildReviewsTile(),
+              const SizedBox(height: 10),
               _actionTile(
                 icon: _place.status == 'paused'
                     ? Icons.play_circle_outline
@@ -282,6 +302,26 @@ class _ListingManageScreenState extends State<ListingManageScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildReviewsTile() {
+    return FutureBuilder<RatingSummary>(
+      future: _ratingFuture,
+      builder: (context, snapshot) {
+        final summary = snapshot.data;
+        final subtitle = summary == null
+            ? null
+            : (summary.isEmpty
+                ? 'No reviews yet'
+                : '★ ${summary.formatted} · ${summary.count} review${summary.count == 1 ? '' : 's'}');
+        return _actionTile(
+          icon: Icons.star_border_rounded,
+          label: 'View Reviews',
+          subtitle: subtitle,
+          onTap: _openReviews,
+        );
+      },
     );
   }
 

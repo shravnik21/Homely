@@ -3,9 +3,13 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/booking.dart';
+import 'package:homely_app/models/review.dart';
 import 'package:homely_app/services/booking_service.dart';
 import 'package:homely_app/services/cancellation_policy.dart';
+import 'package:homely_app/services/review_service.dart';
+import 'package:homely_app/screens/guest/write_review_screen.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
+import 'package:homely_app/widgets/star_rating.dart';
 
 /// Full-detail view for a single booking, opened by tapping a card on
 /// [MyBookingsScreen]. Mirrors the layout of [BookingConfirmationScreen]
@@ -25,6 +29,7 @@ class BookingDetailScreen extends StatefulWidget {
 
 class _BookingDetailScreenState extends State<BookingDetailScreen> {
   final BookingService _bookingService = BookingService();
+  final ReviewService _reviewService = ReviewService();
 
   late Booking _booking;
   bool _isUpdating = false;
@@ -32,10 +37,40 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   // with `true` (refresh the list behind us) or just `false`.
   bool _didChange = false;
 
+  // Only relevant once the stay is completed - null while loading,
+  // stays null (no error state needed) if the lookup fails, since
+  // this is a "nice to have" section, not core booking info.
+  Review? _existingReview;
+  bool _isLoadingReview = false;
+
   @override
   void initState() {
     super.initState();
     _booking = widget.booking;
+    if (_isCompleted) _loadExistingReview();
+  }
+
+  Future<void> _loadExistingReview() async {
+    setState(() => _isLoadingReview = true);
+    try {
+      final review = await _reviewService.getReviewForBooking(_booking.id);
+      if (!mounted) return;
+      setState(() => _existingReview = review);
+    } catch (_) {
+      // Non-critical - the "Leave a review" CTA just won't show if
+      // this fails, rather than blocking the rest of the screen.
+    } finally {
+      if (mounted) setState(() => _isLoadingReview = false);
+    }
+  }
+
+  Future<void> _openWriteReview() async {
+    final submitted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => WriteReviewScreen(booking: _booking),
+      ),
+    );
+    if (submitted == true) _loadExistingReview();
   }
 
   String _fmt(DateTime d) {
@@ -55,6 +90,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   // the future - once it's cancelled, or already completed, there's
   // nothing left to reschedule or cancel.
   bool get _canManage => !_isCancelled && _booking.isUpcoming;
+
+  // A stay is eligible for a review once it's genuinely over - not
+  // cancelled, and checkout has passed. Mirrors the same condition
+  // schema_reviews.sql's insert policy enforces server-side.
+  bool get _isCompleted => !_isCancelled && !_booking.isUpcoming;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +135,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               _sectionTitle('Price details'),
               const SizedBox(height: 10),
               _buildPriceBreakdown(),
+              if (_isCompleted) ...[
+                const SizedBox(height: 24),
+                _buildReviewSection(),
+              ],
               const SizedBox(height: 24),
               _buildReference(),
             ],
@@ -346,6 +390,89 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  // ---- Review section - only shown once the stay is completed.
+  // Shows a "Leave a review" prompt if the guest hasn't reviewed yet,
+  // or their existing rating + comment if they have. ----
+  Widget _buildReviewSection() {
+    if (_isLoadingReview) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    final review = _existingReview;
+    if (review != null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.lightGrey,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Your review',
+                  style: TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.dark),
+                ),
+                const Spacer(),
+                StarRatingDisplay(rating: review.rating.toDouble(), size: 16),
+              ],
+            ),
+            if (review.comment != null && review.comment!.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                review.comment!,
+                style: const TextStyle(fontSize: 13, color: AppColors.grey, height: 1.4),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.lightGrey,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'How was your stay?',
+                  style: TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.dark),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Leave a review to help future guests.',
+                  style: TextStyle(fontSize: 12, color: AppColors.grey),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 40)),
+            onPressed: _openWriteReview,
+            child: const Text('Leave a review'),
+          ),
         ],
       ),
     );

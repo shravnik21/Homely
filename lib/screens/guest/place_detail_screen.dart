@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
+import 'package:homely_app/models/review.dart';
 import 'package:homely_app/screens/guest/booking_screen.dart';
+import 'package:homely_app/services/review_service.dart';
 import 'package:homely_app/services/wishlist_service.dart';
+import 'package:homely_app/widgets/review_tile.dart';
+import 'package:homely_app/widgets/star_rating.dart';
 
 class PlaceDetailScreen extends StatefulWidget {
   final Place place;
@@ -17,13 +21,16 @@ class PlaceDetailScreen extends StatefulWidget {
 class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
   final PageController _pageController = PageController();
   final WishlistService _wishlistService = WishlistService();
+  final ReviewService _reviewService = ReviewService();
   int _currentImageIndex = 0;
   bool _isWishlisted = false;
+  late Future<List<Review>> _reviewsFuture;
 
   @override
   void initState() {
     super.initState();
     _loadWishlistStatus();
+    _reviewsFuture = _reviewService.getReviewsForPlace(widget.place.id);
   }
 
   Future<void> _loadWishlistStatus() async {
@@ -108,6 +115,8 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  _buildRatingSummary(),
                   const SizedBox(height: 18),
                   _buildStatsChips(place),
                   const Divider(height: 36, color: AppColors.lightGrey),
@@ -166,6 +175,9 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                   ],
 
                   const SizedBox(height: 24),
+                  _buildReviewsSection(),
+
+                  const SizedBox(height: 24),
                   _buildHostCard(place),
                 ],
               ),
@@ -174,6 +186,94 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
         ),
       ),
       bottomNavigationBar: _buildBookingBar(context, place),
+    );
+  }
+
+  // ---- Rating summary - "★ 4.8 · 24 reviews" next to the location,
+  // same at-a-glance format Airbnb uses on its own listing pages.
+  // Hidden entirely (rather than showing "0 reviews") for a brand
+  // new listing with no reviews yet.
+  Widget _buildRatingSummary() {
+    return FutureBuilder<List<Review>>(
+      future: _reviewsFuture,
+      builder: (context, snapshot) {
+        final reviews = snapshot.data ?? [];
+        final summary = RatingSummary.fromReviews(reviews);
+        if (summary.isEmpty) return const SizedBox.shrink();
+        return Row(
+          children: [
+            const Icon(Icons.star_rounded, size: 18, color: AppColors.primary),
+            const SizedBox(width: 4),
+            Text(
+              summary.formatted,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: AppColors.dark,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '· ${summary.count} review${summary.count == 1 ? '' : 's'}',
+              style: const TextStyle(color: AppColors.grey, fontSize: 13),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ---- Full reviews list - guest star rating + comment feedback,
+  // matching Airbnb's per-listing review section. Kept sleek and
+  // minimal per the brief: consistent star icons, no cards-within-
+  // cards clutter, just a thin divider between entries. ----
+  Widget _buildReviewsSection() {
+    return FutureBuilder<List<Review>>(
+      future: _reviewsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        }
+
+        final reviews = snapshot.data ?? [];
+        final summary = RatingSummary.fromReviews(reviews);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              summary.isEmpty
+                  ? 'Reviews'
+                  : 'Reviews (${summary.count})',
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: AppColors.dark,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (reviews.isEmpty)
+              const Text(
+                'No reviews yet. Be the first to stay and leave feedback!',
+                style: TextStyle(color: AppColors.grey, fontSize: 13),
+              )
+            else
+              ...List.generate(reviews.length, (index) {
+                final review = reviews[index];
+                return Padding(
+                  padding: EdgeInsets.only(
+                      bottom: index == reviews.length - 1 ? 0 : 18),
+                  child: ReviewTile(review: review),
+                );
+              }),
+          ],
+        );
+      },
     );
   }
 

@@ -12,6 +12,9 @@ import 'package:homely_app/screens/host/listing_wizard_screen.dart';
 import 'package:homely_app/screens/host/my_listings_screen.dart';
 import 'package:homely_app/screens/host/host_bookings_screen.dart';
 import 'package:homely_app/screens/host/host_earnings_screen.dart';
+import 'package:homely_app/screens/host/host_reviews_screen.dart';
+import 'package:homely_app/services/review_service.dart';
+import 'package:homely_app/models/review.dart';
 import 'package:homely_app/utils/auto_reload_on_reconnect.dart';
 import 'package:homely_app/utils/currency_format.dart';
 import 'package:homely_app/utils/network_retry.dart';
@@ -22,7 +25,12 @@ import 'package:homely_app/utils/network_retry.dart';
 class _HostDashboardData {
   final List<Place> listings;
   final List<HostBooking> bookings;
-  const _HostDashboardData({required this.listings, required this.bookings});
+  final List<Review> reviews;
+  const _HostDashboardData({
+    required this.listings,
+    required this.bookings,
+    required this.reviews,
+  });
 }
 
 enum _BookingUpdateType { cancelled, rescheduled }
@@ -67,6 +75,7 @@ class _HostHomeScreenState extends State<HostHomeScreen>
   final AuthService _authService = AuthService();
   final HostListingsService _listingsService = HostListingsService();
   final HostBookingsService _bookingsService = HostBookingsService();
+  final ReviewService _reviewsService = ReviewService();
 
   late Future<_HostDashboardData> _dashboardFuture;
 
@@ -103,9 +112,11 @@ class _HostHomeScreenState extends State<HostHomeScreen>
       _dashboardFuture = withRetry(() => Future.wait([
             _listingsService.getMyListings(),
             _bookingsService.getBookingsForMyListings(),
+            _reviewsService.getReviewsForHostListings(),
           ]).then((results) => _HostDashboardData(
                 listings: results[0] as List<Place>,
                 bookings: results[1] as List<HostBooking>,
+                reviews: results[2] as List<Review>,
               )));
     });
   }
@@ -160,6 +171,12 @@ class _HostHomeScreenState extends State<HostHomeScreen>
     _refreshDashboard();
   }
 
+  Future<void> _viewReviews() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const HostReviewsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -183,6 +200,8 @@ class _HostHomeScreenState extends State<HostHomeScreen>
                   _buildAddListingCard(),
                   const SizedBox(height: 16),
                   _buildBookingUpdatesCard(bookings),
+                  const SizedBox(height: 16),
+                  _buildReviewsCard(snapshot.data?.reviews ?? []),
                   const SizedBox(height: 16),
                   _buildViewListingsCard(),
                   const SizedBox(height: 28),
@@ -671,6 +690,86 @@ class _HostHomeScreenState extends State<HostHomeScreen>
               children: [
                 Text(
                   hasUpdates ? 'View all bookings' : 'Go to your bookings',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_forward_rounded,
+                    color: Colors.white, size: 16),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Same dark-card treatment as "Booking updates" above it - both are
+  /// "here's what's new" summaries the host taps into for the full
+  /// picture, as opposed to "Your Listings"/"Add a Listing" below,
+  /// which stay in the primary color since those are action prompts.
+  Widget _buildReviewsCard(List<Review> reviews) {
+    final summary = RatingSummary.fromReviews(reviews);
+    return GestureDetector(
+      onTap: _viewReviews,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.dark,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.star_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Reviews',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (!summary.isEmpty)
+                  Row(
+                    children: [
+                      Text(
+                        summary.formatted,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.star_rounded, color: Colors.white, size: 15),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              summary.isEmpty
+                  ? "You'll see guest ratings and feedback here once a "
+                      "stay is completed and reviewed."
+                  : '${summary.count} review${summary.count == 1 ? '' : 's'} '
+                      'across your listings.',
+              style: const TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text(
+                  summary.isEmpty ? 'Go to reviews' : 'View all reviews',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,

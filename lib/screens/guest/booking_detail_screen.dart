@@ -158,11 +158,14 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final title = cancelled
         ? 'Booking cancelled'
         : (_booking.isUpcoming ? 'Booking confirmed' : 'Trip completed');
+    final cancelledOnText =
+        _booking.cancelledAt != null ? 'Cancelled on ${_fmt(_booking.cancelledAt!)}' : null;
     final subtitle = cancelled
         ? (_booking.refundAmount != null
-            ? '₹${_booking.refundAmount!.toStringAsFixed(0)} refunded'
+            ? '${cancelledOnText != null ? '$cancelledOnText · ' : ''}'
+                '₹${_booking.refundAmount!.toStringAsFixed(0)} refunded'
                 '${(_booking.cancellationFee ?? 0) > 0 ? ' · ₹${_booking.cancellationFee!.toStringAsFixed(0)} cancellation fee' : ''}.'
-            : 'This booking is no longer active.')
+            : (cancelledOnText ?? 'This booking is no longer active.'))
         : (_booking.isUpcoming
             ? 'You\'re all set for this stay.'
             : 'We hope you enjoyed your stay.');
@@ -314,6 +317,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           const Divider(height: 22, color: AppColors.white),
           _detailRow('Guests',
               '${_booking.guests} guest${_booking.guests > 1 ? 's' : ''}'),
+          if (_isCancelled && _booking.cancelledAt != null) ...[
+            const Divider(height: 22, color: AppColors.white),
+            _detailRow('Cancelled on', _fmt(_booking.cancelledAt!)),
+          ],
         ],
       ),
     );

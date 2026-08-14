@@ -11,6 +11,7 @@ import 'package:homely_app/screens/host/host_profile_screen.dart';
 import 'package:homely_app/screens/host/listing_wizard_screen.dart';
 import 'package:homely_app/screens/host/my_listings_screen.dart';
 import 'package:homely_app/screens/host/host_bookings_screen.dart';
+import 'package:homely_app/screens/host/host_calendar_screen.dart';
 import 'package:homely_app/screens/host/host_earnings_screen.dart';
 import 'package:homely_app/screens/host/host_reviews_screen.dart';
 import 'package:homely_app/services/review_service.dart';
@@ -133,6 +134,12 @@ class _HostHomeScreenState extends State<HostHomeScreen>
   void _openProfile() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const HostProfileScreen()),
+    );
+  }
+
+  void _openCalendar() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const HostCalendarScreen()),
     );
   }
 
@@ -388,25 +395,47 @@ class _HostHomeScreenState extends State<HostHomeScreen>
             ),
           ],
         ),
-        GestureDetector(
-          onTap: _openProfile,
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.primary,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              _initial,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+        Row(
+          children: [
+            GestureDetector(
+              onTap: _openCalendar,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withValues(alpha: 0.10),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.calendar_month_rounded,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: _openProfile,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

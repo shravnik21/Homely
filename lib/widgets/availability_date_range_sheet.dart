@@ -149,7 +149,7 @@ class _AvailabilityDateSheetState extends State<_AvailabilityDateSheet> {
                             size: 8, color: Color(0xFFBEBEBE)),
                         SizedBox(width: 6),
                         Text(
-                          'Greyed-out dates are already booked',
+                          'Greyed-out dates aren\'t available',
                           style:
                               TextStyle(fontSize: 12, color: AppColors.grey),
                         ),
@@ -231,8 +231,8 @@ class _AvailabilityDateSheetState extends State<_AvailabilityDateSheet> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(
-                              "Some nights in that range are already "
-                              "booked - try a different range.",
+                              "Some nights in that range aren't available - "
+                              "try a different range.",
                             ),
                           ),
                         );

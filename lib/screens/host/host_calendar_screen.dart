@@ -2,22 +2,45 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/models/place.dart';
 import 'package:homely_app/models/host_booking.dart';
+import 'package:homely_app/models/blocked_date.dart';
+import 'package:homely_app/services/host_listings_service.dart';
 import 'package:homely_app/services/host_bookings_service.dart';
+import 'package:homely_app/services/blocked_dates_service.dart';
 import 'package:homely_app/screens/host/host_booking_detail_screen.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
 import 'package:homely_app/utils/network_retry.dart';
 
-/// Month-view calendar for the host, showing every booking across
-/// ALL of their listings at once (as opposed to the guest-side
+/// Everything the host calendar needs, fetched together so bookings,
+/// blocked dates, and the listing-filter chips never disagree with
+/// each other and only ever show one loading spinner.
+class _HostCalendarData {
+  final List<Place> listings;
+  final List<HostBooking> bookings;
+  final List<BlockedDate> blockedDates;
+  const _HostCalendarData({
+    required this.listings,
+    required this.bookings,
+    required this.blockedDates,
+  });
+}
+
+/// Month-view calendar for the host, showing every booking across ALL
+/// of their listings at once (as opposed to the guest-side
 /// availability calendar in availability_date_range_sheet.dart, which
 /// is scoped to one listing and only greys out dates - this one is
 /// scoped to one host and actively surfaces who's arriving when).
 ///
-/// Tapping a date that has one or more bookings pops open a small
-/// floating card anchored near where the host tapped, listing each
-/// booking on that date (listing + guest + date range); tapping a row
-/// in that card opens the full [HostBookingDetailScreen].
+/// Also where a host blocks/unblocks dates on a specific listing
+/// (personal use, maintenance, etc) - a blocked date is folded into
+/// AvailabilityService on the guest side automatically, so it shows
+/// up greyed-out there with no further wiring needed.
+///
+/// Tapping a date that has a booking or a blocked date pops open a
+/// small floating card anchored near where the host tapped; tapping a
+/// booking row in that card opens the full [HostBookingDetailScreen],
+/// and a blocked-date row can be un-blocked right from the card.
 class HostCalendarScreen extends StatefulWidget {
   const HostCalendarScreen({super.key});
 
@@ -26,21 +49,29 @@ class HostCalendarScreen extends StatefulWidget {
 }
 
 class _HostCalendarScreenState extends State<HostCalendarScreen> {
+  final HostListingsService _listingsService = HostListingsService();
   final HostBookingsService _bookingsService = HostBookingsService();
+  final BlockedDatesService _blockedDatesService = BlockedDatesService();
 
-  late Future<List<HostBooking>> _bookingsFuture;
+  late Future<_HostCalendarData> _dataFuture;
+  List<Place> _listings = [];
+  List<HostBooking> _allBookings = [];
+  List<BlockedDate> _allBlocked = [];
+
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
-  // Kept in the coordinate space of _stackKey's own box (not raw
-  // screen/global coordinates) since that's what the floating card
-  // below is Positioned relative to.
+  // Coordinate space of _stackKey's own box (not raw screen/global
+  // coordinates), so it lines up with the Positioned floating card
+  // below, which lives inside that same Stack.
   Offset? _tapPosition;
   final GlobalKey _stackKey = GlobalKey();
 
-  // Map from a day (date-only) to every booking that covers that
-  // night (check-in inclusive, check-out exclusive - same convention
-  // AvailabilityService/the guest calendar use elsewhere in the app).
-  Map<DateTime, List<HostBooking>> _bookingsByDate = {};
+  // null = "All listings". Blocking requires one specific listing to
+  // be selected, since a blocked date always belongs to exactly one
+  // listing.
+  String? _selectedListingId;
+  bool _blockMode = false;
+  bool _savingBlock = false;
 
   @override
   void initState() {
@@ -50,58 +81,102 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
 
   void _load() {
     setState(() {
-      _bookingsFuture = withRetry(() => _bookingsService.getBookingsForMyListings())
-          .then((bookings) {
-        _bookingsByDate = _groupByDate(bookings);
-        return bookings;
+      _dataFuture = withRetry(() => Future.wait([
+            _listingsService.getMyListings(),
+            _bookingsService.getBookingsForMyListings(),
+            _blockedDatesService.getBlockedDatesForMyListings(),
+          ])).then((results) {
+        _listings = results[0] as List<Place>;
+        _allBookings = results[1] as List<HostBooking>;
+        _allBlocked = results[2] as List<BlockedDate>;
+        return _HostCalendarData(
+          listings: _listings,
+          bookings: _allBookings,
+          blockedDates: _allBlocked,
+        );
       });
     });
   }
 
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  Map<DateTime, List<HostBooking>> _groupByDate(List<HostBooking> bookings) {
-    final map = <DateTime, List<HostBooking>>{};
-    for (final hb in bookings) {
-      if (hb.booking.status == 'cancelled') continue;
-      for (var d = _dateOnly(hb.booking.checkIn);
-          d.isBefore(_dateOnly(hb.booking.checkOut));
-          d = d.add(const Duration(days: 1))) {
-        map.putIfAbsent(d, () => []).add(hb);
-      }
-    }
-    return map;
+  /// Bookings visible on the calendar right now - all of them, unless
+  /// a specific listing is selected, in which case only that
+  /// listing's.
+  List<HostBooking> get _visibleBookings => _selectedListingId == null
+      ? _allBookings
+      : _allBookings
+          .where((b) => b.booking.placeId == _selectedListingId)
+          .toList();
+
+  List<BlockedDate> get _visibleBlocked => _selectedListingId == null
+      ? _allBlocked
+      : _allBlocked.where((b) => b.placeId == _selectedListingId).toList();
+
+  List<HostBooking> _bookingsFor(DateTime day) {
+    final d = _dateOnly(day);
+    return _visibleBookings.where((hb) {
+      if (hb.booking.status == 'cancelled') return false;
+      final checkIn = _dateOnly(hb.booking.checkIn);
+      final checkOut = _dateOnly(hb.booking.checkOut);
+      return !d.isBefore(checkIn) && d.isBefore(checkOut);
+    }).toList();
   }
 
-  List<HostBooking> _bookingsFor(DateTime day) =>
-      _bookingsByDate[_dateOnly(day)] ?? const [];
+  List<BlockedDate> _blockedFor(DateTime day) {
+    final d = _dateOnly(day);
+    return _visibleBlocked.where((b) => isSameDay(b.date, d)).toList();
+  }
+
+  String? get _selectedListingTitle {
+    if (_selectedListingId == null) return null;
+    for (final p in _listings) {
+      if (p.id == _selectedListingId) return p.title;
+    }
+    return null;
+  }
 
   /// Converts a raw pointer position (global/screen coordinates) into
   /// this screen's own [_stackKey] box's local coordinate space, so it
-  /// lines up with the [Positioned] floating card below - which lives
-  /// inside that Stack, offset from the screen's top-left by the
-  /// AppBar/status bar.
+  /// lines up with the [Positioned] floating card below.
   Offset? _toLocal(Offset globalPosition) {
     final box = _stackKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.attached) return null;
     return box.globalToLocal(globalPosition);
   }
 
+  void _selectListing(String? placeId) {
+    setState(() {
+      _selectedListingId = placeId;
+      if (placeId == null) _blockMode = false;
+      _selectedDay = null;
+      _tapPosition = null;
+    });
+  }
+
   void _onDayTapped(DateTime day, Offset globalTapPosition) {
-    final bookings = _bookingsFor(day);
+    final dayOnly = _dateOnly(day);
+
+    if (_blockMode && _selectedListingId != null) {
+      _toggleBlock(dayOnly);
+      return;
+    }
+
+    final bookings = _bookingsFor(dayOnly);
+    final blocked = _blockedFor(dayOnly);
     final local = _toLocal(globalTapPosition) ?? globalTapPosition;
-    if (bookings.isEmpty) {
-      // Tapping an empty date just clears any open card, same as
-      // tapping the dimmed backdrop would.
+
+    if (bookings.isEmpty && blocked.isEmpty) {
       setState(() {
         _selectedDay = null;
         _tapPosition = null;
       });
       return;
     }
+
     setState(() {
       _focusedDay = day;
-      _selectedDay = _dateOnly(day);
+      _selectedDay = dayOnly;
       _tapPosition = local;
     });
   }
@@ -111,6 +186,81 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
       _selectedDay = null;
       _tapPosition = null;
     });
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _toggleBlock(DateTime day) async {
+    final listingId = _selectedListingId;
+    final listingTitle = _selectedListingTitle;
+    if (listingId == null || listingTitle == null) return;
+
+    if (day.isBefore(_dateOnly(DateTime.now()))) {
+      _showSnack("You can't block a date in the past.");
+      return;
+    }
+    final hasBooking = _bookingsFor(day)
+        .any((b) => b.booking.placeId == listingId);
+    if (hasBooking) {
+      _showSnack("That date is already booked - it can't be blocked.");
+      return;
+    }
+    if (_savingBlock) return;
+
+    final alreadyBlocked =
+        _blockedFor(day).any((b) => b.placeId == listingId);
+
+    setState(() => _savingBlock = true);
+    try {
+      if (alreadyBlocked) {
+        await _blockedDatesService.unblockDate(placeId: listingId, date: day);
+        setState(() {
+          _allBlocked.removeWhere(
+              (b) => b.placeId == listingId && isSameDay(b.date, day));
+        });
+        _showSnack('Unblocked ${_formatShortDate(day)} for $listingTitle');
+      } else {
+        await _blockedDatesService.blockDate(placeId: listingId, date: day);
+        setState(() {
+          _allBlocked.add(BlockedDate(
+            placeId: listingId,
+            placeTitle: listingTitle,
+            date: day,
+          ));
+        });
+        _showSnack('Blocked ${_formatShortDate(day)} for $listingTitle');
+      }
+    } catch (e) {
+      _showSnack(friendlyError(e, fallback: "Couldn't update that date - try again."));
+    } finally {
+      if (mounted) setState(() => _savingBlock = false);
+    }
+  }
+
+  Future<void> _unblockFromCard(BlockedDate blockedDate) async {
+    setState(() => _savingBlock = true);
+    try {
+      await _blockedDatesService.unblockDate(
+        placeId: blockedDate.placeId,
+        date: blockedDate.date,
+      );
+      setState(() {
+        _allBlocked.removeWhere((b) =>
+            b.placeId == blockedDate.placeId &&
+            isSameDay(b.date, blockedDate.date));
+      });
+      _dismissCard();
+      _showSnack(
+          'Unblocked ${_formatShortDate(blockedDate.date)} for ${blockedDate.placeTitle}');
+    } catch (e) {
+      _showSnack(friendlyError(e, fallback: "Couldn't update that date - try again."));
+    } finally {
+      if (mounted) setState(() => _savingBlock = false);
+    }
   }
 
   void _openBookingDetail(HostBooking hostBooking) {
@@ -136,8 +286,8 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
         ),
       ),
       body: SafeArea(
-        child: FutureBuilder<List<HostBooking>>(
-          future: _bookingsFuture,
+        child: FutureBuilder<_HostCalendarData>(
+          future: _dataFuture,
           builder: (context, snapshot) {
             final loading = snapshot.connectionState == ConnectionState.waiting;
             final failed = snapshot.hasError;
@@ -155,7 +305,7 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
                       Text(
                         friendlyError(
                           snapshot.error!,
-                          fallback: 'Could not load your bookings.',
+                          fallback: 'Could not load your calendar.',
                         ),
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: AppColors.error),
@@ -168,9 +318,8 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
               );
             }
 
-            final allBookings = snapshot.data ?? [];
             final activeCount =
-                allBookings.where((b) => b.booking.status != 'cancelled').length;
+                _allBookings.where((b) => b.booking.status != 'cancelled').length;
 
             return LayoutBuilder(
               builder: (context, constraints) {
@@ -183,10 +332,16 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                         children: [
+                          if (_listings.length > 1) ...[
+                            _buildListingSelector(),
+                            const SizedBox(height: 14),
+                          ],
+                          _buildBlockControls(),
+                          const SizedBox(height: 12),
                           _buildLegend(activeCount),
                           const SizedBox(height: 8),
                           _buildCalendar(),
-                          if (activeCount == 0) ...[
+                          if (activeCount == 0 && _allBlocked.isEmpty) ...[
                             const SizedBox(height: 24),
                             _buildEmptyState(),
                           ],
@@ -215,6 +370,141 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
     );
   }
 
+  /// Horizontal chip row to scope the calendar (and blocking) to one
+  /// listing, or back to "All listings". Only shown when the host has
+  /// more than one listing - with just one, there's nothing to
+  /// disambiguate.
+  Widget _buildListingSelector() {
+    return SizedBox(
+      height: 34,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _buildListingChip(
+            label: 'All listings',
+            selected: _selectedListingId == null,
+            onTap: () => _selectListing(null),
+          ),
+          const SizedBox(width: 8),
+          for (final place in _listings) ...[
+            _buildListingChip(
+              label: place.title,
+              selected: _selectedListingId == place.id,
+              onTap: () => _selectListing(place.id),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListingChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.lightGrey,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : AppColors.dark,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The block/unblock toggle - only usable once a specific listing
+  /// is selected, since a blocked date always belongs to one listing.
+  Widget _buildBlockControls() {
+    if (_selectedListingId == null) {
+      if (_listings.length <= 1 && _listings.isNotEmpty) {
+        // Single-listing hosts don't need the chip row above, but
+        // still need a listing selected to block dates - do it for
+        // them silently.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _selectedListingId == null) {
+            setState(() => _selectedListingId = _listings.first.id);
+          }
+        });
+        return const SizedBox.shrink();
+      }
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.lightGrey,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.info_outline_rounded, size: 16, color: AppColors.grey),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Select a listing above to block dates for it.',
+                style: TextStyle(fontSize: 12.5, color: AppColors.grey),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _blockMode ? AppColors.dark : AppColors.lightGrey,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _blockMode ? Icons.block_rounded : Icons.event_busy_rounded,
+            size: 18,
+            color: _blockMode ? Colors.white : AppColors.dark,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _blockMode
+                  ? 'Tap a free date to block it, tap a blocked date to '
+                      'unblock it.'
+                  : "Block dates so guests can't book them on "
+                      '${_selectedListingTitle ?? "this listing"}.',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: _blockMode ? Colors.white70 : AppColors.grey,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch(
+            value: _blockMode,
+            activeColor: AppColors.primary,
+            onChanged: (v) => setState(() {
+              _blockMode = v;
+              _selectedDay = null;
+              _tapPosition = null;
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLegend(int activeCount) {
     return Row(
       children: [
@@ -227,16 +517,24 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
           ),
         ),
         const SizedBox(width: 6),
-        const Text(
-          'Dates with a booking - tap a date to see details',
-          style: TextStyle(fontSize: 12.5, color: AppColors.grey),
+        const Text('Booked', style: TextStyle(fontSize: 12, color: AppColors.grey)),
+        const SizedBox(width: 14),
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(
+            color: AppColors.grey.withValues(alpha: 0.7),
+            shape: BoxShape.circle,
+          ),
         ),
+        const SizedBox(width: 6),
+        const Text('Blocked', style: TextStyle(fontSize: 12, color: AppColors.grey)),
         const Spacer(),
         if (activeCount > 0)
           Text(
-            '$activeCount total',
+            '$activeCount booking${activeCount == 1 ? '' : 's'}',
             style: const TextStyle(
-              fontSize: 12.5,
+              fontSize: 12,
               color: AppColors.grey,
               fontWeight: FontWeight.w600,
             ),
@@ -246,7 +544,7 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
   }
 
   Widget _buildCalendar() {
-    return TableCalendar<HostBooking>(
+    return TableCalendar<Object>(
       firstDay: DateTime.now().subtract(const Duration(days: 365)),
       lastDay: DateTime.now().add(const Duration(days: 365)),
       focusedDay: _focusedDay,
@@ -254,7 +552,6 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
           _selectedDay != null && isSameDay(day, _selectedDay),
       calendarFormat: CalendarFormat.month,
       availableGestures: AvailableGestures.horizontalSwipe,
-      eventLoader: _bookingsFor,
       onPageChanged: (focused) => setState(() => _focusedDay = focused),
       // onDaySelected still gives us the logical day; the Listener
       // wrapped around each cell in calendarBuilders below gives us
@@ -269,91 +566,78 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
         titleCentered: true,
         titleTextStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
       ),
-      calendarStyle: const CalendarStyle(
-        outsideDaysVisible: false,
-        markersMaxCount: 1,
-        markerDecoration: BoxDecoration(
-          color: AppColors.primary,
-          shape: BoxShape.circle,
-        ),
-        todayDecoration: BoxDecoration(
-          color: AppColors.lightGrey,
-          shape: BoxShape.circle,
-        ),
-        todayTextStyle: TextStyle(color: AppColors.dark),
-        selectedDecoration: BoxDecoration(
-          color: AppColors.primary,
-          shape: BoxShape.circle,
+      calendarStyle: const CalendarStyle(outsideDaysVisible: false),
+      calendarBuilders: CalendarBuilders(
+        defaultBuilder: (context, day, focusedDay) =>
+            _dayCell(day, isToday: false),
+        todayBuilder: (context, day, focusedDay) =>
+            _dayCell(day, isToday: true),
+        selectedBuilder: (context, day, focusedDay) => Listener(
+          onPointerDown: (event) => _tapPosition = event.position,
+          child: Container(
+            margin: const EdgeInsets.all(4),
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '${day.day}',
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
         ),
       ),
-      calendarBuilders: CalendarBuilders(
-        defaultBuilder: (context, day, focusedDay) {
-          final hasBooking = _bookingsFor(day).isNotEmpty;
-          return Listener(
-            onPointerDown: (event) => _tapPosition = event.position,
-            child: Container(
-              margin: const EdgeInsets.all(4),
-              alignment: Alignment.center,
-              decoration: hasBooking
-                  ? BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.10),
-                      shape: BoxShape.circle,
-                    )
-                  : null,
-              child: Text(
-                '${day.day}',
-                style: TextStyle(
-                  color: hasBooking ? AppColors.primary : AppColors.dark,
-                  fontWeight: hasBooking ? FontWeight.w700 : FontWeight.normal,
-                ),
-              ),
-            ),
-          );
-        },
-        selectedBuilder: (context, day, focusedDay) {
-          return Listener(
-            onPointerDown: (event) => _tapPosition = event.position,
-            child: Container(
-              margin: const EdgeInsets.all(4),
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                '${day.day}',
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w700),
-              ),
-            ),
-          );
-        },
-        todayBuilder: (context, day, focusedDay) {
-          final hasBooking = _bookingsFor(day).isNotEmpty;
-          return Listener(
-            onPointerDown: (event) => _tapPosition = event.position,
-            child: Container(
-              margin: const EdgeInsets.all(4),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: hasBooking
-                    ? AppColors.primary.withValues(alpha: 0.18)
-                    : AppColors.lightGrey,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.primary, width: 1.2),
-              ),
-              child: Text(
-                '${day.day}',
-                style: const TextStyle(
-                    color: AppColors.dark, fontWeight: FontWeight.w700),
-              ),
-            ),
-          );
-        },
-        // Hide the default dot marker under the day number - the
-        // tinted circle background above is enough of a signal, and
-        // avoids double-marking the same date.
-        markerBuilder: (context, day, events) => const SizedBox.shrink(),
+    );
+  }
+
+  /// One calendar cell. Booked takes visual priority over blocked
+  /// when a date is somehow both (only possible in "All listings"
+  /// view, where a booking on one listing and a block on a different
+  /// listing can share the same date) - the floating card underneath
+  /// still lists both accurately regardless of which color wins here.
+  Widget _dayCell(DateTime day, {required bool isToday}) {
+    final hasBooking = _bookingsFor(day).isNotEmpty;
+    final hasBlocked = !hasBooking && _blockedFor(day).isNotEmpty;
+
+    Color? fill;
+    Color textColor = AppColors.dark;
+    FontWeight weight = FontWeight.normal;
+    Widget? badge;
+
+    if (hasBooking) {
+      fill = AppColors.primary.withValues(alpha: isToday ? 0.22 : 0.10);
+      textColor = AppColors.primary;
+      weight = FontWeight.w700;
+    } else if (hasBlocked) {
+      fill = AppColors.grey.withValues(alpha: isToday ? 0.28 : 0.16);
+      textColor = AppColors.dark;
+      weight = FontWeight.w700;
+      badge = Positioned(
+        bottom: 2,
+        right: 2,
+        child: Icon(Icons.block_rounded, size: 9, color: AppColors.grey.withValues(alpha: 0.9)),
+      );
+    }
+
+    return Listener(
+      onPointerDown: (event) => _tapPosition = event.position,
+      child: Container(
+        margin: const EdgeInsets.all(4),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: fill,
+          shape: BoxShape.circle,
+          border: isToday ? Border.all(color: AppColors.primary, width: 1.2) : null,
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Text('${day.day}', style: TextStyle(color: textColor, fontWeight: weight)),
+            if (badge != null) badge,
+          ],
+        ),
       ),
     );
   }
@@ -368,8 +652,8 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
       ),
       alignment: Alignment.center,
       child: const Text(
-        'No bookings yet. Once guests book any of your listings, '
-        'those dates will show up here.',
+        'No bookings or blocked dates yet. Once guests book, or you '
+        'block a date, it will show up here.',
         textAlign: TextAlign.center,
         style: TextStyle(color: AppColors.grey, fontSize: 13),
       ),
@@ -381,10 +665,8 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
   /// enough room at the bottom of the screen, and clamping it
   /// horizontally so it never runs off either edge.
   Widget _buildFloatingCard(Size stackSize) {
-    // Adaptive so this never overflows on a narrow phone (or looks
-    // silly stretched full-width on a tablet).
     final cardWidth = (stackSize.width - 24.0).clamp(220.0, 300.0);
-    const maxCardHeight = 320.0;
+    const maxCardHeight = 340.0;
     final tap = _tapPosition!;
 
     double left = tap.dx - cardWidth / 2;
@@ -396,6 +678,7 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
     final bottom = showAbove ? (stackSize.height - tap.dy) + 18 : null;
 
     final bookings = _bookingsFor(_selectedDay!);
+    final blocked = _blockedFor(_selectedDay!);
 
     return Positioned(
       left: left,
@@ -430,10 +713,10 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          _formatCardTitle(_selectedDay!),
+                          _formatCardTitle(_selectedDay!, bookings.length, blocked.length),
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            fontSize: 13.5,
                             color: AppColors.dark,
                           ),
                         ),
@@ -452,13 +735,16 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
                 ),
                 const Divider(height: 1),
                 Flexible(
-                  child: ListView.separated(
+                  child: ListView(
                     shrinkWrap: true,
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemCount: bookings.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, i) =>
-                        _buildBookingRow(bookings[i]),
+                    children: [
+                      for (final hb in bookings) ...[
+                        _buildBookingRow(hb),
+                        const Divider(height: 1),
+                      ],
+                      for (final bd in blocked) _buildBlockedRow(bd),
+                    ],
                   ),
                 ),
               ],
@@ -549,15 +835,65 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
     );
   }
 
-  String _formatCardTitle(DateTime day) {
+  Widget _buildBlockedRow(BlockedDate blockedDate) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.lightGrey,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(Icons.block_rounded,
+                size: 20, color: AppColors.grey),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  blockedDate.placeTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Blocked by you - not bookable',
+                  style: TextStyle(fontSize: 11.5, color: AppColors.grey),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: _savingBlock ? null : () => _unblockFromCard(blockedDate),
+            child: const Text('Unblock', style: TextStyle(fontSize: 12.5)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatCardTitle(DateTime day, int bookingCount, int blockedCount) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    final bookings = _bookingsFor(day);
-    final countLabel =
-        '${bookings.length} booking${bookings.length == 1 ? '' : 's'}';
-    return '${day.day} ${months[day.month - 1]} ${day.year} - $countLabel';
+    final parts = <String>[];
+    if (bookingCount > 0) {
+      parts.add('$bookingCount booking${bookingCount == 1 ? '' : 's'}');
+    }
+    if (blockedCount > 0) {
+      parts.add('$blockedCount blocked');
+    }
+    final suffix = parts.isEmpty ? '' : ' - ${parts.join(', ')}';
+    return '${day.day} ${months[day.month - 1]} ${day.year}$suffix';
   }
 
   String _formatShortDate(DateTime d) {

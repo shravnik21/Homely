@@ -16,6 +16,9 @@ class HostBookingsService {
   /// filtering server-side) plus one follow-up query to resolve guest
   /// profiles, since `bookings.user_id` and `profiles.id` aren't
   /// linked by a foreign key PostgREST can auto-embed across.
+  /// Excludes anything the host has swiped away via [hideBooking] -
+  /// that's a per-host flag (schema_hide_bookings.sql), so it has no
+  /// effect on what the guest sees for the same booking.
   Future<List<HostBooking>> getBookingsForMyListings() async {
     final hostId = _client.auth.currentUser?.id;
     if (hostId == null) return [];
@@ -25,6 +28,7 @@ class HostBookingsService {
         .select(
             '*, places!inner(title, address, city_id, host_id, cities(name), place_images(image_url, sort_order))')
         .eq('places.host_id', hostId)
+        .eq('hidden_by_host', false)
         .order('check_in', ascending: false);
 
     final rows = (response as List).cast<Map<String, dynamic>>();
@@ -79,6 +83,19 @@ class HostBookingsService {
     await _client
         .from('bookings')
         .update({'host_notes': (trimmed == null || trimmed.isEmpty) ? null : trimmed})
+        .eq('id', bookingId);
+  }
+
+  /// Removes a booking from the HOST's own bookings list only (see
+  /// schema_hide_bookings.sql) - a soft delete, not visible to the
+  /// guest and doesn't touch the booking itself. Intended for
+  /// past/cancelled bookings the host just wants off their list; the
+  /// caller (HostBookingsScreen) is responsible for only offering
+  /// this on bookings where `!booking.isUpcoming`.
+  Future<void> hideBooking(String bookingId) async {
+    await _client
+        .from('bookings')
+        .update({'hidden_by_host': true})
         .eq('id', bookingId);
   }
 }

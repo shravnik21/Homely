@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
+import 'package:homely_app/config/checkin_methods.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/models/review.dart';
 import 'package:homely_app/screens/guest/booking_screen.dart';
 import 'package:homely_app/services/review_service.dart';
 import 'package:homely_app/services/wishlist_service.dart';
 import 'package:homely_app/widgets/review_tile.dart';
-import 'package:homely_app/widgets/star_rating.dart';
+//import 'package:homely_app/widgets/star_rating.dart';
 
 class PlaceDetailScreen extends StatefulWidget {
   final Place place;
@@ -119,6 +120,15 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                   _buildRatingSummary(),
                   const SizedBox(height: 18),
                   _buildStatsChips(place),
+
+                  // Only shown if the host actually filled in at
+                  // least one of these (self check-in and/or a custom
+                  // highlight) - see Place.hasHighlights.
+                  if (place.hasHighlights) ...[
+                    const Divider(height: 36, color: AppColors.lightGrey),
+                    _buildHighlights(place),
+                  ],
+
                   const Divider(height: 36, color: AppColors.lightGrey),
                   const Text(
                     'About this place',
@@ -478,6 +488,77 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
         chip(Icons.bathtub_outlined, '${place.bathrooms} Bath'),
         const SizedBox(width: 10),
         chip(Icons.people_outline, '${place.maxGuests} Guest'),
+      ],
+    );
+  }
+
+  // Short icon + headline + description rows for standout things
+  // about this place - same idea as Airbnb's own listing-page
+  // highlights (e.g. "Self check-in", "Great location"), simplified
+  // to one fixed toggle plus two fully host-written slots. Only ever
+  // called when place.hasHighlights is true, so there's always at
+  // least one row to show.
+  Widget _buildHighlights(Place place) {
+    Widget row(IconData icon, String title, String? description) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 26, color: AppColors.dark),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.dark,
+                    ),
+                  ),
+                  if (description != null && description.trim().isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      description.trim(),
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        color: AppColors.grey,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (place.checkinMethod != null &&
+            place.checkinMethod!.trim().isNotEmpty)
+          row(
+            checkinMethodFor(place.checkinMethod!).icon,
+            checkinMethodFor(place.checkinMethod!).label,
+            (place.checkinDetails != null &&
+                    place.checkinDetails!.trim().isNotEmpty)
+                ? place.checkinDetails
+                : checkinMethodFor(place.checkinMethod!).subtitle,
+          ),
+        if (place.highlight1Title != null &&
+            place.highlight1Title!.trim().isNotEmpty)
+          row(Icons.auto_awesome_rounded, place.highlight1Title!.trim(),
+              place.highlight1Description),
+        if (place.highlight2Title != null &&
+            place.highlight2Title!.trim().isNotEmpty)
+          row(Icons.auto_awesome_rounded, place.highlight2Title!.trim(),
+              place.highlight2Description),
       ],
     );
   }

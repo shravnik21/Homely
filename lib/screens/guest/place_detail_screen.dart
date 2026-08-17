@@ -546,10 +546,15 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
           row(
             checkinMethodFor(place.checkinMethod!).icon,
             checkinMethodFor(place.checkinMethod!).label,
+            // The host's own words if they wrote any, otherwise the
+            // catalog's GUEST-facing phrasing for this method - not
+            // `.subtitle`, which is written in the host's voice
+            // ("Guest enters a code you provide") and would read
+            // backwards shown here on the guest's own listing page.
             (place.checkinDetails != null &&
                     place.checkinDetails!.trim().isNotEmpty)
                 ? place.checkinDetails
-                : checkinMethodFor(place.checkinMethod!).subtitle,
+                : checkinMethodFor(place.checkinMethod!).guestSubtitle,
           ),
         if (place.highlight1Title != null &&
             place.highlight1Title!.trim().isNotEmpty)

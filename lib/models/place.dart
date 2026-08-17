@@ -100,6 +100,16 @@ class Place {
     }
     if (place.amenities.isEmpty) missing.add('at least one amenity');
     if ((place.houseRules ?? '').trim().isEmpty) missing.add('house rules');
+    if ((place.checkinMethod ?? '').trim().isEmpty) {
+      missing.add('a check-in method');
+    } else if (place.checkinMethod == 'other' &&
+        (place.checkinDetails ?? '').trim().isEmpty) {
+      // "Other" is a placeholder, not an actual method - a guest
+      // reading "Other: (nothing written)" on the listing page would
+      // learn nothing about how to actually get in, so it only
+      // counts as answered once the host has described it themselves.
+      missing.add('a description of your check-in method');
+    }
     return missing;
   }
 

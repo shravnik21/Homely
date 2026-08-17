@@ -327,8 +327,19 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
         }
         return null;
       case 7:
-        // Entirely optional - a host can publish with no self
-        // check-in and no custom highlights at all.
+        // The two custom highlights below stay entirely optional,
+        // but a check-in method is not - a guest arriving with no
+        // idea how to actually get into the place is exactly the
+        // kind of gap this step exists to close. "Other" additionally
+        // needs the host's own description, since "Other" by itself
+        // tells a guest nothing about what to actually do.
+        if (_checkinMethod == null) {
+          return 'Please select a check-in method to continue';
+        }
+        if (_checkinMethod == 'other' &&
+            _checkinDetailsController.text.trim().isEmpty) {
+          return 'Please describe your check-in method to continue';
+        }
         return null;
       default:
         return null;
@@ -1102,7 +1113,8 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
           const SizedBox(height: 4),
           const Text(
-            'Optional - pick whichever matches, or leave unselected.',
+            "Select whichever matches, or choose \"Other\" and describe "
+            "your own check-in method.",
             style: TextStyle(color: AppColors.grey, fontSize: 12),
           ),
           const SizedBox(height: 12),
@@ -1117,7 +1129,9 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
               maxLength: 120,
               maxLines: 2,
               decoration: InputDecoration(
-                labelText: 'Check-in details (optional)',
+                labelText: _checkinMethod == 'other'
+                    ? 'Check-in details'
+                    : 'Check-in details (optional)',
                 hintText: _checkinMethod == 'other'
                     ? 'Describe how guests should check in at your place.'
                     : 'e.g. Code is 1234, keypad is by the front door.',

@@ -4,6 +4,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/host_booking.dart';
 import 'package:homely_app/services/host_bookings_service.dart';
 import 'package:homely_app/screens/host/host_booking_detail_screen.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 import 'package:homely_app/widgets/error_state_view.dart';
 
 /// Full list of bookings across every listing the host owns, opened
@@ -23,6 +24,12 @@ class HostBookingsScreen extends StatefulWidget {
 class _HostBookingsScreenState extends State<HostBookingsScreen> {
   final HostBookingsService _bookingsService = HostBookingsService();
   late Future<List<HostBooking>> _bookingsFuture;
+
+  // Same local-tracking trick as MyBookingsScreen (guest side): the
+  // hide has already succeeded server-side by the time an id lands
+  // here, this just avoids a full-list reload/flash right after the
+  // swipe animation.
+  final Set<String> _hiddenIds = {};
 
   @override
   void initState() {
@@ -54,6 +61,58 @@ class _HostBookingsScreenState extends State<HostBookingsScreen> {
     // happened while that screen was open - refresh so the list and
     // tab counts stay accurate.
     _refresh();
+  }
+
+  /// Gate + confirm + actually perform a swipe-delete. Returns true
+  /// only once the hide has genuinely succeeded server-side, since
+  /// that's what tells [Dismissible] it's safe to finish removing the
+  /// card - if this returns false, the card slides back into place.
+  /// Restricted to bookings that are no longer active (past checkout,
+  /// or cancelled) - a host shouldn't be able to swipe away a guest
+  /// who's currently booked in or arriving soon.
+  Future<bool> _confirmDelete(HostBooking hostBooking) async {
+    final booking = hostBooking.booking;
+    if (booking.isUpcoming) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("You can only remove past or cancelled bookings."),
+        ),
+      );
+      return false;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove this booking?'),
+        content: const Text(
+          "This only removes it from your bookings list - it won't notify "
+          "the guest or change their booking.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return false;
+
+    try {
+      await _bookingsService.hideBooking(booking.id);
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(e, fallback: "Couldn't remove that booking."))),
+      );
+      return false;
+    }
   }
 
   @override
@@ -103,7 +162,9 @@ class _HostBookingsScreenState extends State<HostBookingsScreen> {
                 );
               }
 
-              final all = snapshot.data ?? [];
+              final all = (snapshot.data ?? [])
+                  .where((b) => !_hiddenIds.contains(b.booking.id))
+                  .toList();
               // Cancelled takes priority in the split so a booking
               // that was cancelled after the fact never lingers in
               // Upcoming/Completed - a cancelled booking is always
@@ -156,10 +217,44 @@ class _HostBookingsScreenState extends State<HostBookingsScreen> {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       itemCount: bookings.length,
-      itemBuilder: (context, index) => _HostBookingCard(
-        hostBooking: bookings[index],
-        formatDate: _fmt,
-        onTap: () => _openDetail(bookings[index]),
+      itemBuilder: (context, index) {
+        final hostBooking = bookings[index];
+        return Dismissible(
+          key: ValueKey(hostBooking.booking.id),
+          direction: DismissDirection.endToStart,
+          confirmDismiss: (_) => _confirmDelete(hostBooking),
+          onDismissed: (_) =>
+              setState(() => _hiddenIds.add(hostBooking.booking.id)),
+          background: _buildDeleteBackground(),
+          child: _HostBookingCard(
+            hostBooking: hostBooking,
+            formatDate: _fmt,
+            onTap: () => _openDetail(hostBooking),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDeleteBackground() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      decoration: BoxDecoration(
+        color: AppColors.error,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      alignment: Alignment.centerRight,
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
+          SizedBox(height: 2),
+          Text('Delete',
+              style: TextStyle(
+                  color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

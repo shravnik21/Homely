@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
+import 'package:homely_app/config/checkin_methods.dart';
 import 'package:homely_app/services/listing_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
@@ -84,6 +85,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     'Amenities',
     'Pricing',
     'House Rules',
+    'Highlights',
     'Review & Publish',
   ];
 
@@ -121,6 +123,18 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
 
   final _houseRulesController = TextEditingController();
 
+  // ---- Highlights: a check-in method (picked from a fixed set of
+  // cards, plus free-text details) and two fully custom slots, shown
+  // on PlaceDetailScreen as short icon+title+description rows (see
+  // schema_place_highlights.sql / schema_place_checkin_method.sql).
+  // All optional - a host can publish with none of these filled in.
+  String? _checkinMethod;
+  final _checkinDetailsController = TextEditingController();
+  final _highlight1TitleController = TextEditingController();
+  final _highlight1DescController = TextEditingController();
+  final _highlight2TitleController = TextEditingController();
+  final _highlight2DescController = TextEditingController();
+
   bool get _isEditing => widget.existingPlace != null;
 
   @override
@@ -151,6 +165,12 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     _priceController.text =
         place.pricePerNight > 0 ? place.pricePerNight.toStringAsFixed(0) : '';
     _houseRulesController.text = place.houseRules ?? '';
+    _checkinMethod = place.checkinMethod;
+    _checkinDetailsController.text = place.checkinDetails ?? '';
+    _highlight1TitleController.text = place.highlight1Title ?? '';
+    _highlight1DescController.text = place.highlight1Description ?? '';
+    _highlight2TitleController.text = place.highlight2Title ?? '';
+    _highlight2DescController.text = place.highlight2Description ?? '';
     for (final url in place.photoUrls) {
       _photos.add(_WizardPhoto(uploadedUrl: url));
     }
@@ -188,6 +208,11 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     _descriptionController.dispose();
     _priceController.dispose();
     _houseRulesController.dispose();
+    _checkinDetailsController.dispose();
+    _highlight1TitleController.dispose();
+    _highlight1DescController.dispose();
+    _highlight2TitleController.dispose();
+    _highlight2DescController.dispose();
     super.dispose();
   }
 
@@ -301,6 +326,10 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
           return 'Please enter your house rules to continue';
         }
         return null;
+      case 7:
+        // Entirely optional - a host can publish with no self
+        // check-in and no custom highlights at all.
+        return null;
       default:
         return null;
     }
@@ -353,6 +382,20 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       case 6:
         await _listingService.updateListing(
             _placeId!, {'house_rules': _houseRulesController.text.trim()});
+        break;
+      case 7:
+        String? orNull(TextEditingController c) {
+          final t = c.text.trim();
+          return t.isEmpty ? null : t;
+        }
+        await _listingService.updateListing(_placeId!, {
+          'checkin_method': _checkinMethod,
+          'checkin_details': orNull(_checkinDetailsController),
+          'highlight1_title': orNull(_highlight1TitleController),
+          'highlight1_description': orNull(_highlight1DescController),
+          'highlight2_title': orNull(_highlight2TitleController),
+          'highlight2_description': orNull(_highlight2DescController),
+        });
         break;
     }
   }
@@ -425,6 +468,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       await _persistStep(4);
       await _persistStep(5);
       await _persistStep(6);
+      await _persistStep(7);
       await _listingService.publishListing(_placeId!);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -445,6 +489,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       await _persistStep(4);
       await _persistStep(5);
       await _persistStep(6);
+      await _persistStep(7);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Draft saved')),
@@ -567,6 +612,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
                   _stepAmenities(),
                   _stepPricing(),
                   _stepHouseRules(),
+                  _stepHighlights(),
                   _stepReview(),
                 ],
               ),
@@ -1034,7 +1080,200 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     );
   }
 
-  // ---- Step 8: Review & Publish ----
+  // ---- Step 8: Highlights ----
+  Widget _stepHighlights() {
+    return _sectionWrap(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "What makes this place special?",
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.dark),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            "These show up right on your listing page - all optional, but "
+            "a couple of standout points help guests decide faster.",
+            style: TextStyle(color: AppColors.grey, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: 20),
+          const Text('How do guests check in?',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          const SizedBox(height: 4),
+          const Text(
+            'Optional - pick whichever matches, or leave unselected.',
+            style: TextStyle(color: AppColors.grey, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          ...kCheckinMethods.map((option) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _checkinMethodCard(option),
+              )),
+          if (_checkinMethod != null) ...[
+            const SizedBox(height: 4),
+            TextFormField(
+              controller: _checkinDetailsController,
+              maxLength: 120,
+              maxLines: 2,
+              decoration: InputDecoration(
+                labelText: 'Check-in details (optional)',
+                hintText: _checkinMethod == 'other'
+                    ? 'Describe how guests should check in at your place.'
+                    : 'e.g. Code is 1234, keypad is by the front door.',
+                counterText: '',
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+          _highlightEditor(
+            index: 1,
+            titleController: _highlight1TitleController,
+            descController: _highlight1DescController,
+            hintTitle: 'e.g. Dive right in',
+            hintDesc:
+                'e.g. This is one of the few places in the area with a pool.',
+          ),
+          const SizedBox(height: 16),
+          _highlightEditor(
+            index: 2,
+            titleController: _highlight2TitleController,
+            descController: _highlight2DescController,
+            hintTitle: 'e.g. Extra spacious',
+            hintDesc: "e.g. Guests love this home's space for a comfortable "
+                'stay.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// One selectable check-in method card - tapping it selects that
+  /// method, or deselects (back to "not set") if it's already the
+  /// selected one, since a host may decide not to specify a method
+  /// at all.
+  Widget _checkinMethodCard(CheckinMethodOption option) {
+    final selected = _checkinMethod == option.value;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => setState(() {
+        _checkinMethod = selected ? null : option.value;
+      }),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.06)
+              : AppColors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.lightGrey,
+            width: selected ? 1.6 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppColors.primary.withValues(alpha: 0.14)
+                    : AppColors.lightGrey,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(option.icon,
+                  size: 19,
+                  color: selected ? AppColors.primary : AppColors.dark),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(option.label,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text(option.subtitle,
+                      style: const TextStyle(
+                          color: AppColors.grey, fontSize: 12, height: 1.3)),
+                ],
+              ),
+            ),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              color: selected ? AppColors.primary : AppColors.grey,
+              size: 22,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// One editable highlight "card" - a headline field and a
+  /// description field, same two-field shape Airbnb itself uses when
+  /// a host edits one of their listing highlights. Deliberately no
+  /// icon-picker here (unlike Airbnb) to keep this step quick to fill
+  /// in - each custom highlight just uses a fixed sparkle icon on
+  /// display (see PlaceDetailScreen).
+  Widget _highlightEditor({
+    required int index,
+    required TextEditingController titleController,
+    required TextEditingController descController,
+    required String hintTitle,
+    required String hintDesc,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.lightGrey),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded,
+                  size: 17, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text('Highlight $index',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 13.5)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: titleController,
+            maxLength: 30,
+            decoration: InputDecoration(
+              labelText: 'Headline',
+              hintText: hintTitle,
+              counterText: '',
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: descController,
+            maxLength: 90,
+            maxLines: 2,
+            decoration: InputDecoration(
+              labelText: 'Description',
+              hintText: hintDesc,
+              counterText: '',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---- Step 9: Review & Publish ----
   Widget _stepReview() {
     Widget row(String label, String value) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1103,6 +1342,14 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
               : '₹${_priceController.text.trim()} / night'),
           row('Amenities', _amenities.isEmpty ? '—' : _amenities.join(', ')),
           row('Photos', '${_photos.where((p) => p.uploadedUrl != null).length}'),
+          row('Check-in method',
+              _checkinMethod == null
+                  ? 'Not set'
+                  : checkinMethodFor(_checkinMethod!).label),
+          if (_highlight1TitleController.text.trim().isNotEmpty)
+            row('Highlight 1', _highlight1TitleController.text.trim()),
+          if (_highlight2TitleController.text.trim().isNotEmpty)
+            row('Highlight 2', _highlight2TitleController.text.trim()),
           const SizedBox(height: 24),
           PrimaryButton(
             text: _isEditing ? 'Update & Publish' : 'Publish Listing',

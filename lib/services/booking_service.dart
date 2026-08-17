@@ -44,6 +44,9 @@ class BookingService {
   /// Fetches the logged-in user's bookings, each joined with its
   /// place's title, address, city, and cover image - one network
   /// round trip, same nested-select technique as PlacesService.
+  /// Excludes anything the guest has swiped away via [hideBooking] -
+  /// that's a per-guest flag, so it has no effect on what the host
+  /// sees for the same booking.
   Future<List<Booking>> getUserBookings() async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return [];
@@ -53,11 +56,25 @@ class BookingService {
         .select(
             '*, places(title, address, city_id, price_per_night, max_guests, cities(name), place_images(image_url, sort_order))')
         .eq('user_id', userId)
+        .eq('hidden_by_guest', false)
         .order('check_in', ascending: false);
 
     return (response as List)
         .map((row) => Booking.fromMap(row as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Removes a booking from the GUEST's own bookings list only (see
+  /// schema_hide_bookings.sql) - a soft delete, not a cancellation and
+  /// not visible to the host. Intended for past/cancelled bookings
+  /// the guest just wants off their list; the caller
+  /// (MyBookingsScreen) is responsible for only offering this on
+  /// bookings where `!booking.isUpcoming`.
+  Future<void> hideBooking(String bookingId) async {
+    await _client
+        .from('bookings')
+        .update({'hidden_by_guest': true})
+        .eq('id', bookingId);
   }
 
   /// Marks a booking as cancelled and records what CancellationPolicy

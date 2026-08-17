@@ -24,6 +24,20 @@ class Place {
   final String? houseRules;
   final double? latitude;
   final double? longitude;
+  // checkinMethod is one of a fixed set of keys (see the option list
+  // in ListingWizardScreen) with checkinDetails as the host's own
+  // free-text description of exactly how it works for their place;
+  // highlight1/2 are fully host-written on top of that - see
+  // schema_place_highlights.sql / schema_place_checkin_method.sql. A
+  // highlight only actually shows on PlaceDetailScreen once its title
+  // (or, for check-in, checkinMethod) is set; the description is
+  // optional even then.
+  final String? checkinMethod;
+  final String? checkinDetails;
+  final String? highlight1Title;
+  final String? highlight1Description;
+  final String? highlight2Title;
+  final String? highlight2Description;
 
   Place({
     required this.id,
@@ -45,6 +59,12 @@ class Place {
     this.houseRules,
     this.latitude,
     this.longitude,
+    this.checkinMethod,
+    this.checkinDetails,
+    this.highlight1Title,
+    this.highlight1Description,
+    this.highlight2Title,
+    this.highlight2Description,
   });
   bool get isDraft => status == 'draft';
   bool get isPaused => status == 'paused';
@@ -135,6 +155,21 @@ class Place {
       houseRules: map['house_rules'] as String?,
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
+      checkinMethod: map['checkin_method'] as String?,
+      checkinDetails: map['checkin_details'] as String?,
+      highlight1Title: map['highlight1_title'] as String?,
+      highlight1Description: map['highlight1_description'] as String?,
+      highlight2Title: map['highlight2_title'] as String?,
+      highlight2Description: map['highlight2_description'] as String?,
     );
   }
+
+  /// Whether PlaceDetailScreen's Highlights section has anything to
+  /// show at all - lets that section hide itself completely rather
+  /// than rendering an empty header for a listing the host hasn't
+  /// added any highlights to.
+  bool get hasHighlights =>
+      (checkinMethod != null && checkinMethod!.trim().isNotEmpty) ||
+      (highlight1Title != null && highlight1Title!.trim().isNotEmpty) ||
+      (highlight2Title != null && highlight2Title!.trim().isNotEmpty);
 }

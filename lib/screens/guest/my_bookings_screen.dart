@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/booking.dart';
 import 'package:homely_app/services/booking_service.dart';
+import 'package:homely_app/utils/network_error_helper.dart';
 import 'package:homely_app/widgets/error_state_view.dart';
 import 'booking_detail_screen.dart';
 
@@ -16,6 +17,13 @@ class MyBookingsScreen extends StatefulWidget {
 class _MyBookingsScreenState extends State<MyBookingsScreen> {
   final BookingService _bookingService = BookingService();
   late Future<List<Booking>> _bookingsFuture;
+
+  // Bookings the guest has just swipe-deleted in THIS session. The
+  // hide already happened server-side (hideBooking has resolved by
+  // the time an id lands here - see _confirmDelete), so we don't need
+  // to refetch to hide it; tracking it locally just avoids a jarring
+  // full-list reload/flash right after the swipe animation.
+  final Set<String> _hiddenIds = {};
 
   @override
   void initState() {
@@ -39,6 +47,54 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       ),
     );
     if (changed == true) _refreshBookings();
+  }
+
+  /// Gate + confirm + actually perform a swipe-delete. Returns true
+  /// only once the hide has genuinely succeeded server-side, since
+  /// that's what tells [Dismissible] it's safe to finish removing the
+  /// card - if this returns false, the card slides back into place.
+  Future<bool> _confirmDelete(Booking booking) async {
+    if (booking.isUpcoming) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("You can only remove past or cancelled trips."),
+        ),
+      );
+      return false;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove this trip?'),
+        content: const Text(
+          "This only removes it from your list - it won't cancel anything "
+          "or change your host's records.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return false;
+
+    try {
+      await _bookingService.hideBooking(booking.id);
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(e, fallback: "Couldn't remove that trip."))),
+      );
+      return false;
+    }
   }
 
   String _fmt(DateTime d) {
@@ -92,7 +148,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
               );
             }
 
-            final all = snapshot.data ?? [];
+            final all = (snapshot.data ?? [])
+                .where((b) => !_hiddenIds.contains(b.id))
+                .toList();
             final upcoming = all.where((b) => b.isUpcoming).toList();
             final past = all.where((b) => !b.isUpcoming).toList();
 
@@ -124,10 +182,43 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       itemCount: bookings.length,
-      itemBuilder: (context, index) => _BookingCard(
-        booking: bookings[index],
-        formatDate: _fmt,
-        onTap: () => _openBookingDetails(bookings[index]),
+      itemBuilder: (context, index) {
+        final booking = bookings[index];
+        return Dismissible(
+          key: ValueKey(booking.id),
+          direction: DismissDirection.endToStart,
+          confirmDismiss: (_) => _confirmDelete(booking),
+          onDismissed: (_) => setState(() => _hiddenIds.add(booking.id)),
+          background: _buildDeleteBackground(),
+          child: _BookingCard(
+            booking: booking,
+            formatDate: _fmt,
+            onTap: () => _openBookingDetails(booking),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDeleteBackground() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      decoration: BoxDecoration(
+        color: AppColors.error,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      alignment: Alignment.centerRight,
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Icon(Icons.delete_outline_rounded, color: Colors.white, size: 24),
+          SizedBox(height: 2),
+          Text('Delete',
+              style: TextStyle(
+                  color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

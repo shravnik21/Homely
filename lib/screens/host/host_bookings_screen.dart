@@ -281,11 +281,13 @@ class _HostBookingCard extends StatelessWidget {
     final statusLabel = cancelled
         ? 'Cancelled'
         : (currentlyHosting
-            ? 'Currently hosting'
+            ? (booking.isCheckedIn ? 'Guest checked in' : 'Currently hosting')
             : (booking.isUpcoming ? 'Upcoming' : 'Completed'));
     final statusColor = cancelled
         ? AppColors.error
-        : (booking.isUpcoming ? Colors.green[700]! : AppColors.grey);
+        : (currentlyHosting && booking.isCheckedIn
+            ? AppColors.primary
+            : (booking.isUpcoming ? Colors.green[700]! : AppColors.grey));
 
     return InkWell(
       onTap: onTap,

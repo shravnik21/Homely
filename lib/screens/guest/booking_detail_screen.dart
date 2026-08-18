@@ -43,6 +43,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   Review? _existingReview;
   bool _isLoadingReview = false;
 
+  bool _isConfirmingCheckIn = false;
+
   @override
   void initState() {
     super.initState();
@@ -73,6 +75,31 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     if (submitted == true) _loadExistingReview();
   }
 
+  Future<void> _confirmCheckIn() async {
+    setState(() => _isConfirmingCheckIn = true);
+    try {
+      await _bookingService.confirmCheckIn(_booking.id);
+      if (!mounted) return;
+      setState(() {
+        _booking = _booking.copyWith(checkedInAt: DateTime.now());
+        _didChange = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You're checked in. Enjoy your stay!")),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(friendlyError(e, fallback: 'Could not confirm check-in.')),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isConfirmingCheckIn = false);
+    }
+  }
+
   String _fmt(DateTime d) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -85,6 +112,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       _booking.id.replaceAll('-', '').substring(0, 8).toUpperCase();
 
   bool get _isCancelled => _booking.status == 'cancelled';
+
+  // Shown once the stay is actually live (today is on/after check-in
+  // and on/before checkout) and the guest hasn't confirmed arriving
+  // yet - see Booking.isLive.
+  bool get _showCheckInCard => _booking.isLive && !_booking.isCheckedIn;
 
   // A booking can only be managed while it's confirmed and still in
   // the future - once it's cancelled, or already completed, there's
@@ -127,6 +159,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               _buildStatusBanner(),
               const SizedBox(height: 24),
               _buildPlaceCard(),
+              if (_showCheckInCard) ...[
+                const SizedBox(height: 24),
+                _buildCheckInCard(),
+              ],
               const SizedBox(height: 24),
               _sectionTitle('Trip details'),
               const SizedBox(height: 10),
@@ -157,7 +193,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final icon = cancelled ? Icons.close_rounded : Icons.check_rounded;
     final title = cancelled
         ? 'Booking cancelled'
-        : (_booking.isUpcoming ? 'Booking confirmed' : 'Trip completed');
+        : (!_booking.isUpcoming
+            ? 'Trip completed'
+            : (_booking.isCheckedIn ? 'Checked in' : 'Booking confirmed'));
     final cancelledOnText =
         _booking.cancelledAt != null ? 'Cancelled on ${_fmt(_booking.cancelledAt!)}' : null;
     final subtitle = cancelled
@@ -166,9 +204,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                 '₹${_booking.refundAmount!.toStringAsFixed(0)} refunded'
                 '${(_booking.cancellationFee ?? 0) > 0 ? ' · ₹${_booking.cancellationFee!.toStringAsFixed(0)} cancellation fee' : ''}.'
             : (cancelledOnText ?? 'This booking is no longer active.'))
-        : (_booking.isUpcoming
-            ? 'You\'re all set for this stay.'
-            : 'We hope you enjoyed your stay.');
+        : (!_booking.isUpcoming
+            ? 'We hope you enjoyed your stay.'
+            : (_booking.isCheckedIn
+                ? 'Enjoy your stay!'
+                : 'You\'re all set for this stay.'));
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -397,6 +437,55 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  // ---- Check-in card - only shown while the stay is live and the
+  // guest hasn't confirmed arriving yet. Single tap, no form. ----
+  Widget _buildCheckInCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F8EE),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Have you checked in?",
+                  style: TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.dark),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Let your host know you\'ve arrived.',
+                  style: TextStyle(fontSize: 12, color: AppColors.grey),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(0, 40),
+              backgroundColor: Colors.green[700],
+            ),
+            onPressed: _isConfirmingCheckIn ? null : _confirmCheckIn,
+            child: _isConfirmingCheckIn
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2.2),
+                  )
+                : const Text("I've checked in"),
+          ),
         ],
       ),
     );

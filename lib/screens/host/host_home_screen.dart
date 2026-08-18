@@ -34,12 +34,13 @@ class _HostDashboardData {
   });
 }
 
-enum _BookingUpdateType { cancelled, rescheduled }
+enum _BookingUpdateType { cancelled, rescheduled, checkedIn }
 
-/// One recent change (cancellation or reschedule) a guest made to a
-/// booking on one of the host's listings - built from [Booking]'s
-/// cancelledAt/rescheduledAt fields, purely to drive the "Booking
-/// updates" card below. Not persisted anywhere itself.
+/// One recent change (cancellation, reschedule, or check-in) a guest
+/// made to a booking on one of the host's listings - built from
+/// [Booking]'s cancelledAt/rescheduledAt/checkedInAt fields, purely to
+/// drive the "Booking updates" card below. Not persisted anywhere
+/// itself.
 class _BookingUpdate {
   final _BookingUpdateType type;
   final String guestName;
@@ -263,8 +264,13 @@ class _HostHomeScreenState extends State<HostHomeScreen>
       statusColor = AppColors.error;
       statusLabel = 'Cancelled';
     } else if (booking.isUpcoming) {
-      statusColor = Colors.green[700]!;
-      statusLabel = 'Upcoming';
+      if (booking.isCheckedIn) {
+        statusColor = AppColors.primary;
+        statusLabel = 'Checked in';
+      } else {
+        statusColor = Colors.green[700]!;
+        statusLabel = 'Upcoming';
+      }
     } else {
       statusColor = AppColors.grey;
       statusLabel = 'Completed';
@@ -584,6 +590,15 @@ class _HostHomeScreenState extends State<HostHomeScreen>
           newCheckOut: b.checkOut,
         ));
       }
+      final checkedInAt = b.checkedInAt;
+      if (checkedInAt != null && checkedInAt.isAfter(cutoff)) {
+        updates.add(_BookingUpdate(
+          type: _BookingUpdateType.checkedIn,
+          guestName: hb.guestName,
+          placeTitle: b.placeTitle,
+          when: checkedInAt,
+        ));
+      }
     }
     updates.sort((a, b) => b.when.compareTo(a.when));
     return updates;
@@ -610,6 +625,8 @@ class _HostHomeScreenState extends State<HostHomeScreen>
             : '';
         return '${update.guestName} rescheduled their stay at '
             '${update.placeTitle}.$newDates';
+      case _BookingUpdateType.checkedIn:
+        return '${update.guestName} checked in at ${update.placeTitle}.';
     }
   }
 
@@ -672,10 +689,10 @@ class _HostHomeScreenState extends State<HostHomeScreen>
             const SizedBox(height: 6),
             Text(
               hasUpdates
-                  ? 'Guests have cancelled or rescheduled on your listings '
-                      'in the last 14 days.'
-                  : "You'll see it here when a guest cancels or reschedules "
-                      'a booking on one of your listings.',
+                  ? 'Cancellations, reschedules, and check-ins on your '
+                      'listings in the last 14 days.'
+                  : "You'll see it here when a guest cancels, reschedules, "
+                      'or checks in to one of your listings.',
               style: const TextStyle(color: Colors.white70, fontSize: 13),
             ),
             if (hasUpdates) ...[
@@ -687,9 +704,14 @@ class _HostHomeScreenState extends State<HostHomeScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(
-                            u.type == _BookingUpdateType.cancelled
-                                ? Icons.cancel_outlined
-                                : Icons.event_repeat_rounded,
+                            switch (u.type) {
+                              _BookingUpdateType.cancelled =>
+                                Icons.cancel_outlined,
+                              _BookingUpdateType.rescheduled =>
+                                Icons.event_repeat_rounded,
+                              _BookingUpdateType.checkedIn =>
+                                Icons.how_to_reg_rounded,
+                            },
                             color: Colors.white70,
                             size: 15,
                           ),

@@ -10,12 +10,13 @@ import 'package:homely_app/services/review_service.dart';
 /// Three notification types (booking_confirmed/cancelled/rescheduled)
 /// are entirely trigger-driven server-side (see
 /// schema_notifications.sql) - this service only ever READS those.
-/// The other three (checkin_reminder, review_prompt, suggestion) are
-/// time-based rather than event-based, and this project has no
-/// server-side cron to fire them on a schedule, so
-/// [generateTimeBasedNotifications] creates them lazily on the client
-/// instead, called once whenever the guest opens the Notifications
-/// screen - see that method for how duplicates are avoided.
+/// The other four (checkin_reminder, checkin_log_reminder,
+/// review_prompt, suggestion) are time-based rather than event-based,
+/// and this project has no server-side cron to fire them on a
+/// schedule, so [generateTimeBasedNotifications] creates them lazily
+/// on the client instead, called once whenever the guest opens the
+/// Notifications screen - see that method for how duplicates are
+/// avoided.
 class NotificationsService {
   final _client = SupabaseConfig.client;
   final BookingService _bookingService = BookingService();
@@ -78,6 +79,9 @@ class NotificationsService {
   ///    guest who opens the app regularly gets a nudge at each
   ///    checkpoint, and one who only opens it once still gets an
   ///    accurate "X days to go" the first time they do,
+  ///  - a one-shot "log your check-in" nudge for any confirmed
+  ///    booking whose stay is currently live and hasn't been
+  ///    confirmed via BookingService.confirmCheckIn() yet,
   ///  - a review prompt for any confirmed, already-checked-out
   ///    booking that hasn't been reviewed yet,
   ///  - a one-time welcome/suggestion nudge for a guest who has never
@@ -107,6 +111,11 @@ class NotificationsService {
     final existingReviewPrompts = {
       for (final n in existing)
         if (n.bookingId != null && n.type == 'review_prompt') n.bookingId,
+    };
+    final existingCheckInLogReminders = {
+      for (final n in existing)
+        if (n.bookingId != null && n.type == 'checkin_log_reminder')
+          n.bookingId,
     };
 
     final now = DateTime.now();
@@ -152,6 +161,26 @@ class NotificationsService {
           ));
           break;
         }
+      }
+
+      // Stay is live (today falls between check-in and checkout,
+      // inclusive) and the guest hasn't tapped "I've checked in" yet -
+      // one-shot nudge, same deduped-by-existence shape as
+      // review_prompt below (not milestone-based, so milestoneDays
+      // stays null - see schema_checked_in.sql).
+      if (!today.isBefore(checkIn) &&
+          !today.isAfter(checkOut) &&
+          !booking.isCheckedIn &&
+          !existingCheckInLogReminders.contains(booking.id)) {
+        rows.add(_row(
+          userId: userId,
+          type: 'checkin_log_reminder',
+          title: "Don't forget to log your check-in",
+          body: 'Let your host know you\'ve arrived at '
+              '${booking.placeTitle} - just a tap on your booking.',
+          bookingId: booking.id,
+          placeId: booking.placeId,
+        ));
       }
 
       if (checkOut.isBefore(today) &&

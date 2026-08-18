@@ -346,6 +346,14 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     }
   }
 
+  /// Trims a controller's text, returning null instead of an empty
+  /// string - shared by [_persistStep]'s case 7 and [_publish]'s
+  /// readiness snapshot so both agree on what counts as "filled in".
+  String? _orNull(TextEditingController c) {
+    final t = c.text.trim();
+    return t.isEmpty ? null : t;
+  }
+
   Future<void> _persistStep(int step) async {
     switch (step) {
       case 0:
@@ -395,17 +403,13 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
             _placeId!, {'house_rules': _houseRulesController.text.trim()});
         break;
       case 7:
-        String? orNull(TextEditingController c) {
-          final t = c.text.trim();
-          return t.isEmpty ? null : t;
-        }
         await _listingService.updateListing(_placeId!, {
           'checkin_method': _checkinMethod,
-          'checkin_details': orNull(_checkinDetailsController),
-          'highlight1_title': orNull(_highlight1TitleController),
-          'highlight1_description': orNull(_highlight1DescController),
-          'highlight2_title': orNull(_highlight2TitleController),
-          'highlight2_description': orNull(_highlight2DescController),
+          'checkin_details': _orNull(_checkinDetailsController),
+          'highlight1_title': _orNull(_highlight1TitleController),
+          'highlight1_description': _orNull(_highlight1DescController),
+          'highlight2_title': _orNull(_highlight2TitleController),
+          'highlight2_description': _orNull(_highlight2DescController),
         });
         break;
     }
@@ -414,10 +418,22 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   Future<void> _saveAndExit() async {
     setState(() => _isBusy = true);
     try {
-      // Only persist the current step if it has something worth
-      // saving (step 0 requires a type; every other step is
-      // optional-safe to persist as-is, even blank).
-      if (_currentStep != 0 || _type != null) {
+      final reviewStepIndex = _stepTitles.length - 1;
+      if (_currentStep == reviewStepIndex) {
+        // The review step has no fields of its own to persist - it's
+        // a read-only summary of everything already collected - so
+        // save the same set _saveDraftFromReview/_publish do instead
+        // of a step index the switch in _persistStep has no case for
+        // (which silently did nothing here before).
+        await _persistStep(2);
+        await _persistStep(4);
+        await _persistStep(5);
+        await _persistStep(6);
+        await _persistStep(7);
+      } else if (_currentStep != 0 || _type != null) {
+        // Only persist the current step if it has something worth
+        // saving (step 0 requires a type; every other step is
+        // safe to persist as-is, even blank).
         await _persistStep(_currentStep);
       }
       if (!mounted) return;
@@ -458,6 +474,16 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
           .map((p) => p.uploadedUrl!)
           .toList(),
       houseRules: _houseRulesController.text.trim(),
+      // These three were missing before, which made the readiness
+      // check always see check-in as "not set" - even mid-edit, on a
+      // listing that already had one - since it silently fell back to
+      // Place's defaults (null) instead of the live form state.
+      checkinMethod: _checkinMethod,
+      checkinDetails: _orNull(_checkinDetailsController),
+      highlight1Title: _orNull(_highlight1TitleController),
+      highlight1Description: _orNull(_highlight1DescController),
+      highlight2Title: _orNull(_highlight2TitleController),
+      highlight2Description: _orNull(_highlight2DescController),
     );
     final missing = Place.missingRequirementsForPublish(draftSnapshot);
 
@@ -573,63 +599,77 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.white,
-      appBar: AppBar(
+    return PopScope(
+      // The in-app back arrow already routes through _goBack(), which
+      // steps back one wizard page and only actually exits on step 0.
+      // Without this, the OS-level back gesture (Android back button,
+      // iOS edge-swipe) bypassed that entirely and popped the whole
+      // route straight away - discarding the edit session mid-way
+      // instead of stepping back a page, however deep in the wizard
+      // the host was.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _goBack();
+      },
+      child: Scaffold(
         backgroundColor: AppColors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.dark),
-          onPressed: _isBusy ? null : _goBack,
-        ),
-        title: Text(
-          _stepTitles[_currentStep],
-          style: const TextStyle(
-              color: AppColors.dark, fontWeight: FontWeight.w600, fontSize: 17),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isBusy ? null : _saveAndExit,
-            child: const Text('Save & Exit',
-                style: TextStyle(color: AppColors.primary, fontSize: 13)),
+        appBar: AppBar(
+          backgroundColor: AppColors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppColors.dark),
+            onPressed: _isBusy ? null : _goBack,
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildStepIndicator(),
-            if (_stepError != null)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(_stepError!,
-                    style: const TextStyle(color: AppColors.error, fontSize: 12.5)),
-              ),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _stepPropertyType(),
-                  _stepLocation(),
-                  _stepBasics(),
-                  _stepPhotos(),
-                  _stepAmenities(),
-                  _stepPricing(),
-                  _stepHouseRules(),
-                  _stepHighlights(),
-                  _stepReview(),
-                ],
-              ),
+          title: Text(
+            _stepTitles[_currentStep],
+            style: const TextStyle(
+                color: AppColors.dark, fontWeight: FontWeight.w600, fontSize: 17),
+          ),
+          actions: [
+            TextButton(
+              onPressed: _isBusy ? null : _saveAndExit,
+              child: const Text('Save & Exit',
+                  style: TextStyle(color: AppColors.primary, fontSize: 13)),
             ),
-            _buildBottomBar(),
           ],
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildStepIndicator(),
+              if (_stepError != null)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(_stepError!,
+                      style: const TextStyle(color: AppColors.error, fontSize: 12.5)),
+                ),
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _stepPropertyType(),
+                    _stepLocation(),
+                    _stepBasics(),
+                    _stepPhotos(),
+                    _stepAmenities(),
+                    _stepPricing(),
+                    _stepHouseRules(),
+                    _stepHighlights(),
+                    _stepReview(),
+                  ],
+                ),
+              ),
+              _buildBottomBar(),
+            ],
+          ),
         ),
       ),
     );

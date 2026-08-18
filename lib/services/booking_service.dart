@@ -127,6 +127,16 @@ class BookingService {
     }
   }
 
+  /// Marks a booking as checked-in (see schema_checked_in.sql) - a
+  /// single tap, no fee/quote to compute first like cancel/reschedule
+  /// have. RLS only allows a user to update rows where `user_id`
+  /// matches their own id, same guarantee cancelBooking() relies on.
+  Future<void> confirmCheckIn(String bookingId) async {
+    await _client.from('bookings').update({
+      'checked_in_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', bookingId);
+  }
+
   /// Inserts the booking row and returns its generated `id`, so the
   /// caller can show a booking reference on the confirmation screen.
   Future<String> createBooking({

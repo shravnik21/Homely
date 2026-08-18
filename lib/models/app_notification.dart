@@ -53,6 +53,8 @@ class AppNotification {
         return Icons.event_repeat_rounded;
       case 'checkin_reminder':
         return Icons.luggage_rounded;
+      case 'checkin_log_reminder':
+        return Icons.how_to_reg_rounded;
       case 'review_prompt':
         return Icons.star_rounded;
       case 'suggestion':
@@ -71,6 +73,8 @@ class AppNotification {
         return const Color(0xFFB8860B);
       case 'checkin_reminder':
         return AppColors.primary;
+      case 'checkin_log_reminder':
+        return const Color(0xFF2E7D32);
       case 'review_prompt':
         return const Color(0xFFB8860B);
       case 'suggestion':

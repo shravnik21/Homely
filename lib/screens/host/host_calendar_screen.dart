@@ -493,7 +493,7 @@ class _HostCalendarScreenState extends State<HostCalendarScreen> {
           const SizedBox(width: 8),
           Switch(
             value: _blockMode,
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
             onChanged: (v) => setState(() {
               _blockMode = v;
               _selectedDay = null;

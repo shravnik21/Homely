@@ -153,7 +153,9 @@ class _HostBookingDetailScreenState extends State<HostBookingDetailScreen> {
     final icon = cancelled ? Icons.close_rounded : Icons.check_rounded;
     final title = cancelled
         ? 'Booking cancelled'
-        : (booking.isUpcoming ? 'Booking confirmed' : 'Stay completed');
+        : (!booking.isUpcoming
+            ? 'Stay completed'
+            : (booking.isCheckedIn ? 'Guest checked in' : 'Booking confirmed'));
     final cancelledOnText = booking.cancelledAt != null
         ? 'Cancelled on ${_fmt(booking.cancelledAt!)}'
         : null;
@@ -163,9 +165,11 @@ class _HostBookingDetailScreenState extends State<HostBookingDetailScreen> {
                 '${_hostBooking.guestName} cancelled'
                 '${(booking.cancellationFee ?? 0) > 0 ? ' · ₹${booking.cancellationFee!.toStringAsFixed(0)} cancellation fee charged' : ' · free cancellation, no fee'}.'
             : (cancelledOnText ?? 'This booking is no longer active.'))
-        : (booking.isUpcoming
-            ? '${_hostBooking.guestName} is booked in for this stay.'
-            : 'This stay has already wrapped up.');
+        : (!booking.isUpcoming
+            ? 'This stay has already wrapped up.'
+            : (booking.isCheckedIn
+                ? '${_hostBooking.guestName} has arrived.'
+                : '${_hostBooking.guestName} is booked in for this stay.'));
 
     return Container(
       padding: const EdgeInsets.all(16),

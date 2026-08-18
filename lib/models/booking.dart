@@ -35,6 +35,12 @@ class Booking {
   final DateTime? rescheduledAt;
   final DateTime? previousCheckIn;
   final DateTime? previousCheckOut;
+  // Set once the guest taps "I've checked in" (see schema_checked_in.sql)
+  // - null until then, never unset afterwards. Distinct from the
+  // derived `isUpcoming`/status fields: those track whether the
+  // BOOKING is active, this tracks whether the guest has actually
+  // confirmed arriving.
+  final DateTime? checkedInAt;
 
   Booking({
     required this.id,
@@ -57,6 +63,7 @@ class Booking {
     this.rescheduledAt,
     this.previousCheckIn,
     this.previousCheckOut,
+    this.checkedInAt,
   });
 
   int get nights => checkOut.difference(checkIn).inDays;
@@ -66,6 +73,23 @@ class Booking {
   /// or "Completed" purely based on today's date vs check-out date.
   bool get isUpcoming =>
       status != 'cancelled' && checkOut.isAfter(DateTime.now());
+
+  /// Whether the stay is happening *right now* - today falls between
+  /// check-in and check-out inclusive. This is the window in which
+  /// "I've checked in" is offered/relevant; before it there's nothing
+  /// to confirm yet, after it the stay is over (see [isCompleted]).
+  bool get isLive {
+    if (status == 'cancelled') return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return !today.isBefore(checkIn) && !today.isAfter(checkOut);
+  }
+
+  /// Mirrors BookingDetailScreen's `_isCompleted` - not cancelled, and
+  /// checkout has already passed.
+  bool get isCompleted => status != 'cancelled' && !isUpcoming;
+
+  bool get isCheckedIn => checkedInAt != null;
 
   /// Used by the booking-details screen to reflect a reschedule/cancel
   /// immediately without refetching the whole list from Supabase.
@@ -80,6 +104,7 @@ class Booking {
     DateTime? rescheduledAt,
     DateTime? previousCheckIn,
     DateTime? previousCheckOut,
+    DateTime? checkedInAt,
   }) {
     return Booking(
       id: id,
@@ -102,6 +127,7 @@ class Booking {
       rescheduledAt: rescheduledAt ?? this.rescheduledAt,
       previousCheckIn: previousCheckIn ?? this.previousCheckIn,
       previousCheckOut: previousCheckOut ?? this.previousCheckOut,
+      checkedInAt: checkedInAt ?? this.checkedInAt,
     );
   }
 
@@ -142,6 +168,9 @@ class Booking {
           : null,
       previousCheckOut: map['previous_check_out'] != null
           ? DateTime.parse(map['previous_check_out'] as String)
+          : null,
+      checkedInAt: map['checked_in_at'] != null
+          ? DateTime.parse(map['checked_in_at'] as String)
           : null,
     );
   }

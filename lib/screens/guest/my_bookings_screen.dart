@@ -246,16 +246,21 @@ class _BookingCard extends StatelessWidget {
 
   Widget _buildCard(BuildContext context) {
     final cancelled = booking.status == 'cancelled';
+    final checkedIn = booking.isUpcoming && booking.isCheckedIn;
     final statusLabel = cancelled
         ? 'Cancelled'
-        : (booking.isUpcoming ? 'Upcoming' : 'Completed');
+        : (booking.isUpcoming
+            ? (checkedIn ? 'Checked in' : 'Upcoming')
+            : 'Completed');
     final statusColor = cancelled
         ? AppColors.error
-        : (booking.isUpcoming ? Colors.green : AppColors.grey);
+        : (booking.isUpcoming
+            ? (checkedIn ? AppColors.primary : Colors.green)
+            : AppColors.grey);
     final statusBg = cancelled
         ? AppColors.error.withValues(alpha: 0.1)
         : (booking.isUpcoming
-            ? Colors.green.withValues(alpha: 0.1)
+            ? statusColor.withValues(alpha: 0.1)
             : AppColors.lightGrey);
 
     return Container(

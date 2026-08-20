@@ -10,6 +10,13 @@ class Review {
   final int rating;
   final String? comment;
   final DateTime createdAt;
+  // Only populated when fetched via
+  // ReviewService.getReviewsByCurrentUser() (which joins `places`) -
+  // null for every other query path (getReviewsForPlace,
+  // getReviewsForHostListings), where the caller already knows which
+  // place it's asking about and doesn't need it repeated per-review.
+  final String? placeTitle;
+  final String? placeCoverImage;
 
   Review({
     required this.id,
@@ -20,12 +27,25 @@ class Review {
     required this.rating,
     this.comment,
     required this.createdAt,
+    this.placeTitle,
+    this.placeCoverImage,
   });
 
   String get reviewerInitial =>
       reviewerName.trim().isNotEmpty ? reviewerName.trim()[0].toUpperCase() : '?';
 
   factory Review.fromMap(Map<String, dynamic> map) {
+    final place = map['places'] as Map<String, dynamic>?;
+    String? coverImage;
+    if (place != null) {
+      final images = place['place_images'] as List?;
+      if (images != null && images.isNotEmpty) {
+        final sorted = List<Map<String, dynamic>>.from(images)
+          ..sort((a, b) =>
+              (a['sort_order'] as int? ?? 0).compareTo(b['sort_order'] as int? ?? 0));
+        coverImage = sorted.first['image_url'] as String?;
+      }
+    }
     return Review(
       id: map['id'] as String,
       bookingId: map['booking_id'] as String,
@@ -35,6 +55,8 @@ class Review {
       rating: map['rating'] as int? ?? 0,
       comment: map['comment'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
+      placeTitle: place?['title'] as String?,
+      placeCoverImage: coverImage,
     );
   }
 }

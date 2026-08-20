@@ -2,6 +2,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:homely_app/config/supabase_config.dart';
 import 'package:homely_app/models/review.dart';
 
+/// Thrown when a guest tries to review the same BOOKING a second
+/// time - the one duplicate `reviews` genuinely doesn't allow (the
+/// unique constraint on booking_id in schema_reviews.sql). Distinct
+/// from a generic Exception, same reasoning as BookingConflictException
+/// in booking_service.dart, so WriteReviewScreen can show this exact
+/// message instead of a raw Postgres error string.
+class DuplicateReviewException implements Exception {
+  final String message;
+  const DuplicateReviewException([this.message = "You've already reviewed this stay."]);
+
+  @override
+  String toString() => message;
+}
+
 /// Same service-layer pattern as BookingService/PlacesService -
 /// screens never talk to Supabase directly for reviews, they call
 /// this instead.
@@ -41,6 +55,28 @@ class ReviewService {
         .from('reviews')
         .select('*, places!inner(host_id)')
         .eq('places.host_id', hostId)
+        .order('created_at', ascending: false);
+
+    return (response as List)
+        .map((row) => Review.fromMap(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Every review the CURRENT guest has ever written, newest first,
+  /// each joined with its place's title/cover photo - powers
+  /// MyReviewsScreen ("Your reviews"). Allowed by the
+  /// "Reviewers can view their own reviews" RLS policy
+  /// (schema_reviews.sql), which is scoped to auth.uid() = reviewer_id
+  /// regardless of a listing's current published/paused status.
+  Future<List<Review>> getReviewsByCurrentUser() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return [];
+
+    final response = await _client
+        .from('reviews')
+        .select(
+            '*, places(title, place_images(image_url, sort_order))')
+        .eq('reviewer_id', userId)
         .order('created_at', ascending: false);
 
     return (response as List)
@@ -102,7 +138,7 @@ class ReviewService {
       });
     } catch (e) {
       if (e is PostgrestException && e.code == _uniqueViolationCode) {
-        throw Exception('You\'ve already reviewed this stay.');
+        throw const DuplicateReviewException();
       }
       rethrow;
     }

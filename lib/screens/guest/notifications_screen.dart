@@ -4,6 +4,7 @@ import 'package:homely_app/models/app_notification.dart';
 import 'package:homely_app/services/notifications_service.dart';
 import 'package:homely_app/screens/guest/booking_detail_screen.dart';
 import 'package:homely_app/screens/guest/review_prompt_screen.dart';
+import 'package:homely_app/screens/guest/my_reviews_screen.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
 import 'package:homely_app/utils/network_retry.dart';
 
@@ -50,6 +51,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _load();
   }
 
+  void _showReviewPostedPrompt() {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Review posted!'),
+          action: SnackBarAction(
+            label: 'View your reviews',
+            textColor: AppColors.primary,
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const MyReviewsScreen()),
+              );
+            },
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+  }
+
   Future<void> _openNotification(AppNotification notification) async {
     if (!notification.isRead) {
       // Optimistic - flips locally right away, backend call happens
@@ -79,9 +100,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       // straight to the "your stay is complete" hand-off screen that
       // leads into actually writing the review.
       if (notification.type == 'review_prompt') {
-        await Navigator.of(context).push(
+        final submitted = await Navigator.of(context).push<bool>(
           MaterialPageRoute(builder: (_) => ReviewPromptScreen(booking: booking)),
         );
+        if (submitted == true && mounted) _showReviewPostedPrompt();
       } else {
         await Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => BookingDetailScreen(booking: booking)),

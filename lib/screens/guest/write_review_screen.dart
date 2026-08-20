@@ -69,9 +69,16 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
+      // Same pattern as booking_screen.dart's BookingConflictException
+      // handling - a DuplicateReviewException is already
+      // user-friendly on its own, so show it directly instead of
+      // masking it behind the generic fallback.
+      final isDuplicate = e is DuplicateReviewException;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(friendlyError(e, fallback: 'Could not submit your review.')),
+          content: Text(isDuplicate
+              ? e.toString()
+              : friendlyError(e, fallback: 'Could not submit your review.')),
           backgroundColor: AppColors.error,
         ),
       );

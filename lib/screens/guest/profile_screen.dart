@@ -6,6 +6,7 @@ import 'package:homely_app/screens/guest/settings/settings_screen.dart';
 import 'package:homely_app/screens/guest/settings/about_screen.dart';
 import 'package:homely_app/screens/guest/settings/help_support_screen.dart';
 import 'package:homely_app/screens/guest/my_bookings_screen.dart';
+import 'package:homely_app/screens/guest/my_reviews_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -97,6 +98,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const MyBookingsScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildMenuTile(
+              icon: Icons.star_outline_rounded,
+              label: 'Your Reviews',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const MyReviewsScreen()),
                 );
               },
             ),

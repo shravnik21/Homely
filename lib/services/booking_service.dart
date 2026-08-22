@@ -54,7 +54,7 @@ class BookingService {
     final response = await _client
         .from('bookings')
         .select(
-            '*, places(title, address, city_id, price_per_night, max_guests, cities(name), place_images(image_url, sort_order))')
+            '*, places(title, address, city_id, price_per_night, max_guests, host_id, cities(name), place_images(image_url, sort_order), host_public_info(full_name))')
         .eq('user_id', userId)
         .eq('hidden_by_guest', false)
         .order('check_in', ascending: false);

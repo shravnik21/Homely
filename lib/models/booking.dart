@@ -9,6 +9,12 @@ class Booking {
   final String placeAddress;
   final String cityName;
   final String coverImage;
+  // The listing's host - present whenever the query joins
+  // places/host_public_info (getUserBookings does; the host-side
+  // query doesn't need it, since the host already knows they're the
+  // host). Powers the guest-side "Message host" action.
+  final String? hostId;
+  final String? hostName;
   final DateTime checkIn;
   final DateTime checkOut;
   final int guests;
@@ -50,6 +56,8 @@ class Booking {
     required this.placeAddress,
     required this.cityName,
     required this.coverImage,
+    this.hostId,
+    this.hostName,
     required this.checkIn,
     required this.checkOut,
     required this.guests,
@@ -114,6 +122,8 @@ class Booking {
       placeAddress: placeAddress,
       cityName: cityName,
       coverImage: coverImage,
+      hostId: hostId,
+      hostName: hostName,
       checkIn: checkIn ?? this.checkIn,
       checkOut: checkOut ?? this.checkOut,
       guests: guests,
@@ -148,6 +158,8 @@ class Booking {
       placeAddress: place['address'] as String? ?? '',
       cityName: (place['cities']?['name'] as String?) ?? '',
       coverImage: firstImage,
+      hostId: place['host_id'] as String?,
+      hostName: place['host_public_info']?['full_name'] as String?,
       checkIn: DateTime.parse(map['check_in'] as String),
       checkOut: DateTime.parse(map['check_out'] as String),
       guests: map['guests'] as int? ?? 1,

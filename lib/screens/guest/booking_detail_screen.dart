@@ -7,6 +7,7 @@ import 'package:homely_app/models/review.dart';
 import 'package:homely_app/services/booking_service.dart';
 import 'package:homely_app/services/cancellation_policy.dart';
 import 'package:homely_app/services/review_service.dart';
+import 'package:homely_app/screens/chat_screen.dart';
 import 'package:homely_app/screens/guest/write_review_screen.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
 import 'package:homely_app/widgets/star_rating.dart';
@@ -151,6 +152,14 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.of(context).pop(_didChange),
           ),
+          actions: [
+            if (_booking.hostId != null)
+              IconButton(
+                icon: const Icon(Icons.chat_bubble_outline_rounded),
+                tooltip: 'Message host',
+                onPressed: _openChat,
+              ),
+          ],
         ),
         body: SafeArea(
           child: ListView(
@@ -181,6 +190,23 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           ),
         ),
         bottomNavigationBar: _canManage ? _buildManageBar() : null,
+      ),
+    );
+  }
+
+  void _openChat() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          bookingId: _booking.id,
+          otherPartyId: _booking.hostId!,
+          otherPartyName: (_booking.hostName ?? '').trim().isNotEmpty
+              ? _booking.hostName!.trim()
+              : 'Host',
+          otherPartyIsHost: true,
+          placeTitle: _booking.placeTitle,
+        ),
       ),
     );
   }

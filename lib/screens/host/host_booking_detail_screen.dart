@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/booking.dart';
 import 'package:homely_app/models/host_booking.dart';
+import 'package:homely_app/screens/chat_screen.dart';
 import 'package:homely_app/services/host_bookings_service.dart';
 import 'package:homely_app/services/payout_policy.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
@@ -66,6 +67,22 @@ class _HostBookingDetailScreenState extends State<HostBookingDetailScreen> {
     Clipboard.setData(ClipboardData(text: value));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$label copied')),
+    );
+  }
+
+  void _openChat() {
+    final booking = _hostBooking.booking;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          bookingId: booking.id,
+          otherPartyId: booking.userId,
+          otherPartyName: _hostBooking.guestName,
+          otherPartyIsHost: false,
+          placeTitle: booking.placeTitle,
+        ),
+      ),
     );
   }
 
@@ -215,7 +232,6 @@ class _HostBookingDetailScreenState extends State<HostBookingDetailScreen> {
 
   // ---- Guest card - avatar, name, and quick contact actions ----
   Widget _buildGuestCard() {
-    final hasEmail = (_hostBooking.guestEmail ?? '').trim().isNotEmpty;
     final hasPhone = (_hostBooking.guestPhone ?? '').trim().isNotEmpty;
 
     return Container(
@@ -259,30 +275,27 @@ class _HostBookingDetailScreenState extends State<HostBookingDetailScreen> {
               ),
             ],
           ),
-          if (hasEmail || hasPhone) ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                if (hasPhone)
-                  Expanded(
-                    child: _ContactButton(
-                      icon: Icons.call_outlined,
-                      label: 'Call',
-                      onTap: () => _copyToClipboard('Phone number', _hostBooking.guestPhone!.trim()),
-                    ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              if (hasPhone)
+                Expanded(
+                  child: _ContactButton(
+                    icon: Icons.call_outlined,
+                    label: 'Call',
+                    onTap: () => _copyToClipboard('Phone number', _hostBooking.guestPhone!.trim()),
                   ),
-                if (hasPhone && hasEmail) const SizedBox(width: 10),
-                if (hasEmail)
-                  Expanded(
-                    child: _ContactButton(
-                      icon: Icons.message_outlined,
-                      label: 'Message',
-                      onTap: () => _copyToClipboard('Email', _hostBooking.guestEmail!.trim()),
-                    ),
-                  ),
-              ],
-            ),
-          ],
+                ),
+              if (hasPhone) const SizedBox(width: 10),
+              Expanded(
+                child: _ContactButton(
+                  icon: Icons.message_outlined,
+                  label: 'Message',
+                  onTap: _openChat,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

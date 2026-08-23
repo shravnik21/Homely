@@ -7,6 +7,7 @@ import 'package:homely_app/models/earnings_summary.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/services/host_listings_service.dart';
 import 'package:homely_app/services/host_bookings_service.dart';
+import 'package:homely_app/services/host_notifications_service.dart';
 import 'package:homely_app/screens/host/host_profile_screen.dart';
 import 'package:homely_app/screens/host/listing_wizard_screen.dart';
 import 'package:homely_app/screens/host/my_listings_screen.dart';
@@ -14,6 +15,7 @@ import 'package:homely_app/screens/host/host_bookings_screen.dart';
 import 'package:homely_app/screens/host/host_calendar_screen.dart';
 import 'package:homely_app/screens/host/host_earnings_screen.dart';
 import 'package:homely_app/screens/host/host_reviews_screen.dart';
+import 'package:homely_app/screens/host/host_notifications_screen.dart';
 import 'package:homely_app/services/review_service.dart';
 import 'package:homely_app/models/review.dart';
 import 'package:homely_app/utils/auto_reload_on_reconnect.dart';
@@ -78,8 +80,10 @@ class _HostHomeScreenState extends State<HostHomeScreen>
   final HostListingsService _listingsService = HostListingsService();
   final HostBookingsService _bookingsService = HostBookingsService();
   final ReviewService _reviewsService = ReviewService();
+  final HostNotificationsService _notificationsService = HostNotificationsService();
 
   late Future<_HostDashboardData> _dashboardFuture;
+  int _unreadNotifications = 0;
 
   String get _displayName {
     final meta = _authService.currentUser?.userMetadata;
@@ -99,6 +103,7 @@ class _HostHomeScreenState extends State<HostHomeScreen>
   void initState() {
     super.initState();
     _refreshDashboard();
+    _loadUnreadNotifications();
     // Same reasoning as the guest HomeScreen: don't leave a host
     // stuck on a failed dashboard load just because they were
     // offline (or their clock hadn't finished syncing right after
@@ -125,6 +130,24 @@ class _HostHomeScreenState extends State<HostHomeScreen>
 
   @override
   void onReconnected() => _refreshDashboard();
+
+  Future<void> _loadUnreadNotifications() async {
+    try {
+      final count = await _notificationsService.getUnreadCount();
+      if (!mounted) return;
+      setState(() => _unreadNotifications = count);
+    } catch (_) {
+      // Non-critical - the badge just won't show a count this time.
+    }
+  }
+
+  void _openNotifications() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const HostNotificationsScreen()))
+        // Reading/marking-read only happens inside that screen, so
+        // re-check the count the moment the host comes back from it.
+        .then((_) => _loadUnreadNotifications());
+  }
 
   @override
   void dispose() {
@@ -403,6 +426,43 @@ class _HostHomeScreenState extends State<HostHomeScreen>
         ),
         Row(
           children: [
+            GestureDetector(
+              onTap: _openNotifications,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withValues(alpha: 0.10),
+                ),
+                alignment: Alignment.center,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(
+                      Icons.notifications_none_rounded,
+                      color: AppColors.primary,
+                      size: 22,
+                    ),
+                    if (_unreadNotifications > 0)
+                      Positioned(
+                        top: -2,
+                        right: -3,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: AppColors.error,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.white, width: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
             GestureDetector(
               onTap: _openCalendar,
               child: Container(

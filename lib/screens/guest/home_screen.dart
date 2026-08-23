@@ -4,15 +4,12 @@ import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/services/places_service.dart';
 import 'package:homely_app/services/wishlist_service.dart';
-import 'package:homely_app/services/notifications_service.dart';
 import 'package:homely_app/utils/auto_reload_on_reconnect.dart';
 import 'package:homely_app/utils/network_retry.dart';
 import 'package:homely_app/widgets/place_card.dart';
 import 'package:homely_app/widgets/error_state_view.dart';
 import 'place_detail_screen.dart';
-import 'profile_screen.dart';
 import 'wishlist_screen.dart';
-import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,13 +23,11 @@ class _HomeScreenState extends State<HomeScreen>
   final AuthService _authService = AuthService();
   final PlacesService _placesService = PlacesService();
   final WishlistService _wishlistService = WishlistService();
-  final NotificationsService _notificationsService = NotificationsService();
 
   // Which place ids are currently saved, so PlaceCard knows which
   // hearts to render filled. Loaded once alongside the places list;
   // toggling a heart updates this set locally (no full refetch).
   Set<String> _wishlistedIds = {};
-  int _unreadNotifications = 0;
 
   // Holds the network call itself - a Future. We store it in state
   // (not call getPlaces() directly in build()) so it only fires ONCE
@@ -53,7 +48,6 @@ class _HomeScreenState extends State<HomeScreen>
     _loadPlaces();
     _searchController.addListener(_onSearchChanged);
     _loadWishlistedIds();
-    _loadUnreadNotifications();
     // If this first load fails because the device was offline (or
     // just reconnected and its clock hasn't finished syncing yet -
     // see network_retry.dart), don't leave the user stuck on the
@@ -76,17 +70,6 @@ class _HomeScreenState extends State<HomeScreen>
   void onReconnected() {
     _loadPlaces();
     _loadWishlistedIds();
-    _loadUnreadNotifications();
-  }
-
-  Future<void> _loadUnreadNotifications() async {
-    try {
-      final count = await _notificationsService.getUnreadCount();
-      if (!mounted) return;
-      setState(() => _unreadNotifications = count);
-    } catch (_) {
-      // Non-critical - the badge just won't show a count this time.
-    }
   }
 
   Future<void> _loadWishlistedIds() async {
@@ -165,35 +148,12 @@ class _HomeScreenState extends State<HomeScreen>
     return name.trim().split(' ').first; // first name only
   }
 
-  // Single letter shown inside the round profile button on the header.
-  String get _initial {
-    final meta = _authService.currentUser?.userMetadata;
-    final name = meta?['full_name'] as String?;
-    if (name == null || name.trim().isEmpty) return '?';
-    return name.trim()[0].toUpperCase();
-  }
-
-  void _openProfile() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ProfileScreen()),
-    );
-  }
-
   // Refreshes the saved-ids set on return, in case the user removed
   // something from inside the Wishlist screen itself.
   void _openWishlist() {
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => const WishlistScreen()))
         .then((_) => _loadWishlistedIds());
-  }
-
-  // Refreshes the unread count on return, since opening/reading
-  // notifications (or a lazily-generated new one) happens inside that
-  // screen.
-  void _openNotifications() {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const NotificationsScreen()))
-        .then((_) => _loadUnreadNotifications());
   }
 
   @override
@@ -236,76 +196,17 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ],
           ),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: _openWishlist,
-                child: const SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Icon(
-                    Icons.favorite_border,
-                    color: Color.fromARGB(255, 250, 36, 36),
-                    size: 24,
-                  ),
-                ),
+          GestureDetector(
+            onTap: _openWishlist,
+            child: const SizedBox(
+              width: 44,
+              height: 44,
+              child: Icon(
+                Icons.favorite_border,
+                color: Color.fromARGB(255, 250, 36, 36),
+                size: 24,
               ),
-              const SizedBox(width: 4),
-              GestureDetector(
-                onTap: _openNotifications,
-                child: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      const Center(
-                        child: Icon(
-                          Icons.notifications_none_rounded,
-                          color: AppColors.dark,
-                          size: 25,
-                        ),
-                      ),
-                      if (_unreadNotifications > 0)
-                        Positioned(
-                          top: 7,
-                          right: 8,
-                          child: Container(
-                            width: 11,
-                            height: 11,
-                            decoration: BoxDecoration(
-                              color: AppColors.error,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.white, width: 2),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: _openProfile,
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.primary,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    _initial,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),

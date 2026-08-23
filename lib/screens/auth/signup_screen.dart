@@ -4,7 +4,7 @@ import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
-import 'package:homely_app/screens/guest/home_screen.dart';
+import 'package:homely_app/screens/guest/guest_root_screen.dart';
 import 'package:homely_app/screens/host/host_onboarding_screen.dart';
 import 'package:homely_app/widgets/role_toggle.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
@@ -69,7 +69,7 @@ class _SignupScreenState extends State<SignupScreen> {
           MaterialPageRoute(
             builder: (_) => _selectedRole == UserRole.host
                 ? const HostOnboardingScreen()
-                : const HomeScreen(),
+                : const GuestRootScreen(),
           ),
           (route) => false,
         );

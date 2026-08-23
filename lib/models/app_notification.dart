@@ -59,6 +59,16 @@ class AppNotification {
         return Icons.star_rounded;
       case 'new_message':
         return Icons.chat_bubble_rounded;
+      case 'host_new_booking':
+        return Icons.event_available_rounded;
+      case 'host_booking_cancelled':
+        return Icons.event_busy_rounded;
+      case 'host_booking_rescheduled':
+        return Icons.event_repeat_rounded;
+      case 'new_review':
+        return Icons.star_rounded;
+      case 'checkin_pin_reminder':
+        return Icons.dialpad_rounded;
       case 'suggestion':
       default:
         return Icons.lightbulb_rounded;
@@ -80,6 +90,16 @@ class AppNotification {
       case 'review_prompt':
         return const Color(0xFFB8860B);
       case 'new_message':
+        return AppColors.primary;
+      case 'host_new_booking':
+        return const Color(0xFF2E7D32);
+      case 'host_booking_cancelled':
+        return AppColors.error;
+      case 'host_booking_rescheduled':
+        return const Color(0xFFB8860B);
+      case 'new_review':
+        return const Color(0xFFB8860B);
+      case 'checkin_pin_reminder':
         return AppColors.primary;
       case 'suggestion':
       default:

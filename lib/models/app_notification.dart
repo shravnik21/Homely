@@ -57,6 +57,8 @@ class AppNotification {
         return Icons.how_to_reg_rounded;
       case 'review_prompt':
         return Icons.star_rounded;
+      case 'new_message':
+        return Icons.chat_bubble_rounded;
       case 'suggestion':
       default:
         return Icons.lightbulb_rounded;
@@ -77,6 +79,8 @@ class AppNotification {
         return const Color(0xFF2E7D32);
       case 'review_prompt':
         return const Color(0xFFB8860B);
+      case 'new_message':
+        return AppColors.primary;
       case 'suggestion':
       default:
         return AppColors.grey;

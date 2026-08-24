@@ -5,7 +5,7 @@ import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
 import 'package:homely_app/screens/guest/guest_root_screen.dart';
-import 'package:homely_app/screens/host/host_home_screen.dart';
+import 'package:homely_app/screens/host/host_root_screen.dart';
 import 'package:homely_app/screens/host/host_onboarding_screen.dart';
 import 'package:homely_app/screens/auth/signup_screen.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
           builder: (_) => needsOnboarding
               ? const HostOnboardingScreen()
               : isHost
-                  ? const HostHomeScreen()
+                  ? const HostRootScreen()
                   : const GuestRootScreen(),
         ),
         (route) => false,

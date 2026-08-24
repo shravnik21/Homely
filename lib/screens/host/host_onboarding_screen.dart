@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/services/auth_service.dart';
-import 'package:homely_app/screens/host/host_home_screen.dart';
+import 'package:homely_app/screens/host/host_root_screen.dart';
 
 enum _SlideType { single, steps }
 
@@ -112,7 +112,7 @@ class _HostOnboardingScreenState extends State<HostOnboardingScreen> {
     }
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HostHomeScreen()),
+      MaterialPageRoute(builder: (_) => const HostRootScreen()),
     );
   }
 

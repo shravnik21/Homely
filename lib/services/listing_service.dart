@@ -46,6 +46,50 @@ class ListingService {
     return (response as List).cast<Map<String, dynamic>>();
   }
 
+  /// Looks up a city by name (case-insensitive, whitespace-trimmed),
+  /// or creates it if a host has typed somewhere not in the table yet
+  /// - the Location step's city field accepts any city in India, not
+  /// just the 5 originally seeded ones, so this is what makes that
+  /// actually work rather than just letting the host type into a dead
+  /// end. Needs the INSERT policy from
+  /// schema_cities_host_insert.sql; without it this throws once it
+  /// falls through to the insert.
+  ///
+  /// If two hosts happen to add the same new city at the same moment,
+  /// the insert's unique-name conflict is caught and re-resolved into
+  /// a normal lookup instead of surfacing as an error - either host
+  /// ends up with the same city row either way.
+  Future<Map<String, dynamic>> getOrCreateCity(String name) async {
+    final trimmed = name.trim();
+
+    final existing = await _client
+        .from('cities')
+        .select('id, name')
+        .ilike('name', trimmed)
+        .maybeSingle();
+    if (existing != null) return existing;
+
+    try {
+      return await _client
+          .from('cities')
+          .insert({'name': trimmed})
+          .select('id, name')
+          .single();
+    } on PostgrestException catch (e) {
+      // 23505 = unique_violation - someone else just inserted this
+      // exact city name a moment ago.
+      if (e.code == '23505') {
+        final row = await _client
+            .from('cities')
+            .select('id, name')
+            .ilike('name', trimmed)
+            .single();
+        return row;
+      }
+      rethrow;
+    }
+  }
+
   /// Creates the listing's DB row right after the wizard's first step
   /// (property type), so every later step - including photo uploads,
   /// which need a real place_id - has something to attach to, and so

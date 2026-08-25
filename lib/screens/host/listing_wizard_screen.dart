@@ -97,7 +97,11 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   // ---- form state, one field per collected value ----
   String? _type;
 
-  List<Map<String, dynamic>> _cities = [];
+  // City used to be picked from a fixed 5-city chip list; a host can
+  // now type any city in India instead, so this is a free-text field
+  // - _cityId/_cityName are resolved from it at save time via
+  // ListingService.getOrCreateCity (see _persistStep case 1).
+  final _cityController = TextEditingController();
   String? _cityId;
   String? _cityName;
   // Address is collected as separate, Airbnb-style fields for a much
@@ -140,7 +144,6 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCities();
     if (widget.existingPlace != null) _prefillFrom(widget.existingPlace!);
   }
 
@@ -149,6 +152,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     _type = place.type;
     _cityId = place.cityId;
     _cityName = place.cityName.isEmpty ? null : place.cityName;
+    _cityController.text = _cityName ?? '';
     // The DB only ever stored one joined address string, so there are
     // no separate components to recover here - drop the saved value
     // into the Street / Area field as a sensible best-effort default
@@ -192,14 +196,10 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     return parts.join(', ');
   }
 
-  Future<void> _loadCities() async {
-    final cities = await _listingService.getCities();
-    if (mounted) setState(() => _cities = cities);
-  }
-
   @override
   void dispose() {
     _pageController.dispose();
+    _cityController.dispose();
     _flatController.dispose();
     _streetController.dispose();
     _landmarkController.dispose();
@@ -228,12 +228,18 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     }
     setState(() => _stepError = null);
 
-    if (_currentStep == 0) {
+    if (_currentStep == 0 || _currentStep == 1) {
       // Step 0 has to block: it creates the place row that every
       // later step (photo uploads especially) needs a real id for.
+      // Step 1 (Location) now also has to block: the city field takes
+      // free text, so saving it means an async lookup/insert against
+      // `cities` (see ListingService.getOrCreateCity), and later
+      // steps read the resolved _cityId/_cityName back from local
+      // state rather than re-fetching - that resolution has to finish
+      // before the host moves on, same reasoning as step 0.
       setState(() => _isBusy = true);
       try {
-        await _persistStep(0);
+        await _persistStep(_currentStep);
       } catch (e) {
         if (mounted) setState(() => _stepError = friendlyError(e, fallback: 'Could not save this step.'));
         return;
@@ -292,7 +298,9 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
         if (_type == null) return 'Please select a property type to continue';
         return null;
       case 1:
-        if (_cityId == null) return 'Please select a city to continue';
+        if (_cityController.text.trim().isEmpty) {
+          return 'Please enter a city to continue';
+        }
         if (_streetController.text.trim().isEmpty) {
           return 'Please enter a street / area to continue';
         }
@@ -364,6 +372,15 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
         }
         break;
       case 1:
+        // Resolve the typed city name to an id, creating a new
+        // `cities` row if this is somewhere not seen before (see
+        // ListingService.getOrCreateCity) - _cityId/_cityName are
+        // then kept in sync so the Review step and the publish
+        // readiness snapshot reflect whatever was actually saved.
+        final city =
+            await _listingService.getOrCreateCity(_cityController.text);
+        _cityId = city['id'] as String;
+        _cityName = city['name'] as String;
         await _listingService.updateListing(_placeId!, {
           'city_id': _cityId,
           'address': _buildAddress(),
@@ -776,36 +793,15 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'For now, listings can be added in these 5 destinations. '
+            'Listings can now be added in any city in India. '
             'Dropping a pin on a map is coming in a future update.',
             style: TextStyle(color: AppColors.grey, fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 20),
-          const Text('City',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: _cities.map((c) {
-              final selected = _cityId == c['id'];
-              return ChoiceChip(
-                label: Text(c['name'] as String),
-                selected: selected,
-                onSelected: (_) => setState(() {
-                  _cityId = c['id'] as String;
-                  _cityName = c['name'] as String;
-                }),
-                selectedColor: AppColors.primary.withValues(alpha: 0.15),
-                labelStyle: TextStyle(
-                  color: selected ? AppColors.primary : AppColors.dark,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                ),
-                side: BorderSide(
-                    color: selected ? AppColors.primary : AppColors.lightGrey),
-                backgroundColor: AppColors.lightGrey,
-              );
-            }).toList(),
+          CustomTextField(
+            controller: _cityController,
+            label: 'City',
+            hint: 'e.g. Jaipur',
           ),
           const SizedBox(height: 20),
           const Text('Address',

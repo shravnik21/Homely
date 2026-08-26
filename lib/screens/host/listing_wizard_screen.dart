@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/config/checkin_methods.dart';
+import 'package:homely_app/services/cancellation_policy.dart';
 import 'package:homely_app/services/listing_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
@@ -57,7 +58,8 @@ class _WizardPhoto {
 
 /// Airbnb-style step-through listing creation/edit flow:
 /// property type -> location -> basics -> photos -> amenities ->
-/// pricing -> house rules -> review & publish.
+/// pricing -> cancellation policy -> house rules -> highlights ->
+/// review & publish.
 ///
 /// The DB row is created immediately after step 1 (see
 /// ListingService.createDraftListing) so every later step - including
@@ -84,6 +86,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     'Photos',
     'Amenities',
     'Pricing',
+    'Cancellation Policy',
     'House Rules',
     'Highlights',
     'Review & Publish',
@@ -124,6 +127,16 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   final Set<String> _amenities = {};
 
   final _priceController = TextEditingController();
+
+  // ---- Cancellation Policy: one of the three CancellationPolicyType
+  // values; Flexible additionally needs the host's own cutoff/fee -
+  // see CancellationPolicy for what these actually control. Defaults
+  // to 'moderate' to match the DB column's own default, so a host who
+  // never touches this step still ends up with the exact same
+  // behaviour every listing already had before this feature. ----
+  String _cancellationPolicyType = 'moderate';
+  final _flexibleFreeDaysController = TextEditingController();
+  final _flexibleFeePercentController = TextEditingController();
 
   final _houseRulesController = TextEditingController();
 
@@ -168,6 +181,15 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     _amenities.addAll(place.amenities);
     _priceController.text =
         place.pricePerNight > 0 ? place.pricePerNight.toStringAsFixed(0) : '';
+    _cancellationPolicyType = place.cancellationPolicyType;
+    if (place.cancellationFlexibleFreeDays != null) {
+      _flexibleFreeDaysController.text =
+          place.cancellationFlexibleFreeDays.toString();
+    }
+    if (place.cancellationFlexibleFeePercent != null) {
+      _flexibleFeePercentController.text =
+          place.cancellationFlexibleFeePercent!.toStringAsFixed(0);
+    }
     _houseRulesController.text = place.houseRules ?? '';
     _checkinMethod = place.checkinMethod;
     _checkinDetailsController.text = place.checkinDetails ?? '';
@@ -207,6 +229,8 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+    _flexibleFreeDaysController.dispose();
+    _flexibleFeePercentController.dispose();
     _houseRulesController.dispose();
     _checkinDetailsController.dispose();
     _highlight1TitleController.dispose();
@@ -330,11 +354,25 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
         }
         return null;
       case 6:
+        if (_cancellationPolicyType == 'flexible') {
+          final freeDays =
+              int.tryParse(_flexibleFreeDaysController.text.trim());
+          if (freeDays == null || freeDays < 0) {
+            return 'Please enter a valid number of free-cancellation days';
+          }
+          final feePercent =
+              num.tryParse(_flexibleFeePercentController.text.trim());
+          if (feePercent == null || feePercent < 0 || feePercent > 100) {
+            return 'Please enter a valid cancellation fee percentage (0–100)';
+          }
+        }
+        return null;
+      case 7:
         if (_houseRulesController.text.trim().isEmpty) {
           return 'Please enter your house rules to continue';
         }
         return null;
-      case 7:
+      case 8:
         // The two custom highlights below stay entirely optional,
         // but a check-in method is not - a guest arriving with no
         // idea how to actually get into the place is exactly the
@@ -416,10 +454,22 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
         });
         break;
       case 6:
+        final isFlexible = _cancellationPolicyType == 'flexible';
+        await _listingService.updateListing(_placeId!, {
+          'cancellation_policy_type': _cancellationPolicyType,
+          'cancellation_flexible_free_days': isFlexible
+              ? int.tryParse(_flexibleFreeDaysController.text.trim())
+              : null,
+          'cancellation_flexible_fee_percent': isFlexible
+              ? num.tryParse(_flexibleFeePercentController.text.trim())
+              : null,
+        });
+        break;
+      case 7:
         await _listingService.updateListing(
             _placeId!, {'house_rules': _houseRulesController.text.trim()});
         break;
-      case 7:
+      case 8:
         await _listingService.updateListing(_placeId!, {
           'checkin_method': _checkinMethod,
           'checkin_details': _orNull(_checkinDetailsController),
@@ -447,6 +497,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
         await _persistStep(5);
         await _persistStep(6);
         await _persistStep(7);
+        await _persistStep(8);
       } else if (_currentStep != 0 || _type != null) {
         // Only persist the current step if it has something worth
         // saving (step 0 requires a type; every other step is
@@ -501,6 +552,13 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       highlight1Description: _orNull(_highlight1DescController),
       highlight2Title: _orNull(_highlight2TitleController),
       highlight2Description: _orNull(_highlight2DescController),
+      cancellationPolicyType: _cancellationPolicyType,
+      cancellationFlexibleFreeDays: _cancellationPolicyType == 'flexible'
+          ? int.tryParse(_flexibleFreeDaysController.text.trim())
+          : null,
+      cancellationFlexibleFeePercent: _cancellationPolicyType == 'flexible'
+          ? num.tryParse(_flexibleFeePercentController.text.trim())
+          : null,
     );
     final missing = Place.missingRequirementsForPublish(draftSnapshot);
 
@@ -523,6 +581,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       await _persistStep(5);
       await _persistStep(6);
       await _persistStep(7);
+      await _persistStep(8);
       await _listingService.publishListing(_placeId!);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -544,6 +603,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       await _persistStep(5);
       await _persistStep(6);
       await _persistStep(7);
+      await _persistStep(8);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Draft saved')),
@@ -678,6 +738,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
                     _stepPhotos(),
                     _stepAmenities(),
                     _stepPricing(),
+                    _stepCancellationPolicy(),
                     _stepHouseRules(),
                     _stepHighlights(),
                     _stepReview(),
@@ -1097,7 +1158,135 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     );
   }
 
-  // ---- Step 7: House Rules ----
+  // ---- Step 7: Cancellation Policy ----
+  Widget _stepCancellationPolicy() {
+    return _sectionWrap(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Choose a cancellation policy',
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.dark),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            "This is shown to guests before they book, and decides what "
+            "they're refunded if they cancel.",
+            style: TextStyle(color: AppColors.grey, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: 20),
+          ...CancellationPolicyType.values.map((type) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _cancellationPolicyCard(type),
+              )),
+          if (_cancellationPolicyType == 'flexible') ...[
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: CustomTextField(
+                    controller: _flexibleFreeDaysController,
+                    label: 'Free up to (days before check-in)',
+                    hint: 'e.g. 3',
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: CustomTextField(
+                    controller: _flexibleFeePercentController,
+                    label: 'Fee after that (%)',
+                    hint: 'e.g. 100',
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'e.g. free up to 3 days before check-in, 100% fee (no refund) '
+              'after that, right up to check-in.',
+              style: TextStyle(color: AppColors.grey, fontSize: 11.5, height: 1.3),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// One selectable cancellation-policy card - same radio-card pattern
+  /// as _checkinMethodCard below, showing the policy's name and a
+  /// live one-line summary of what it means (via
+  /// CancellationPolicy.summaryFor, using whatever the host has typed
+  /// into the Flexible fields so far).
+  Widget _cancellationPolicyCard(CancellationPolicyType type) {
+    final selected = _cancellationPolicyType == type.dbValue;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => setState(() {
+        _cancellationPolicyType = type.dbValue;
+        if (type == CancellationPolicyType.flexible &&
+            _flexibleFreeDaysController.text.trim().isEmpty) {
+          _flexibleFreeDaysController.text =
+              CancellationPolicy.flexibleDefaultFreeDays.toString();
+          _flexibleFeePercentController.text =
+              CancellationPolicy.flexibleDefaultFeePercent.toStringAsFixed(0);
+        }
+      }),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.06)
+              : AppColors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.lightGrey,
+            width: selected ? 1.6 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(type.label,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text(
+                    CancellationPolicy.summaryFor(
+                      type,
+                      flexibleFreeDays:
+                          int.tryParse(_flexibleFreeDaysController.text.trim()),
+                      flexibleFeePercent: num.tryParse(
+                          _flexibleFeePercentController.text.trim()),
+                    ),
+                    style: const TextStyle(
+                        color: AppColors.grey, fontSize: 12, height: 1.3),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              color: selected ? AppColors.primary : AppColors.grey,
+              size: 22,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---- Step 8: House Rules ----
   Widget _stepHouseRules() {
     return _sectionWrap(
       child: Column(
@@ -1127,7 +1316,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     );
   }
 
-  // ---- Step 8: Highlights ----
+  // ---- Step 9: Highlights ----
   Widget _stepHighlights() {
     return _sectionWrap(
       child: Column(
@@ -1323,7 +1512,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     );
   }
 
-  // ---- Step 9: Review & Publish ----
+  // ---- Step 10: Review & Publish ----
   Widget _stepReview() {
     Widget row(String label, String value) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1390,6 +1579,10 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
           row('Price', _priceController.text.trim().isEmpty
               ? '—'
               : '₹${_priceController.text.trim()} / night'),
+          row(
+            'Cancellation',
+            CancellationPolicyTypeX.fromDb(_cancellationPolicyType).label,
+          ),
           row('Amenities', _amenities.isEmpty ? '—' : _amenities.join(', ')),
           row('Photos', '${_photos.where((p) => p.uploadedUrl != null).length}'),
           row('Check-in method',

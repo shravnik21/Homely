@@ -4,6 +4,7 @@ import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/booking_service.dart';
 import 'package:homely_app/services/cancellation_policy.dart';
 import 'package:homely_app/screens/guest/booking_confirmation_screen.dart';
+import 'package:homely_app/screens/guest/cancellation_policy_detail_screen.dart';
 import 'package:homely_app/widgets/availability_date_range_sheet.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
 
@@ -241,15 +242,7 @@ class _BookingScreenState extends State<BookingScreen> {
             _buildPriceBreakdown(),
 
             const SizedBox(height: 28),
-            const Text(
-              'Cancellation policy',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.dark),
-            ),
-            const SizedBox(height: 10),
-            _buildCancellationPolicy(),
+            _buildCancellationWarning(),
           ],
         ),
       ),
@@ -257,37 +250,77 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Widget _buildCancellationPolicy() {
-   final  freeDays = CancellationPolicy.fullRefundThresholdDays;
-    final noRefundDays = CancellationPolicy.noRefundThresholdDays;
-    final partialPct = (CancellationPolicy.partialRefundFeeRate * 100).round();
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.lightGrey,
-        borderRadius: BorderRadius.circular(16),
+  // ---- Replaces the old full policy breakdown that used to live on
+  // this screen - a tappable warning instead, so the guest is
+  // prompted to actually go read the listing's specific policy (see
+  // PlaceDetailScreen's card / CancellationPolicyDetailScreen) rather
+  // than skimming past a wall of text before every booking. ----
+  Widget _buildCancellationWarning() {
+    final type =
+        CancellationPolicyTypeX.fromDb(widget.place.cancellationPolicyType);
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CancellationPolicyDetailScreen(place: widget.place),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _PolicyRow(
-            days: '$freeDays+ days before check-in',
-            outcome: 'Free cancellation',
-            good: true,
-          ),
-          const SizedBox(height: 10),
-          _PolicyRow(
-            days: '$noRefundDays–${freeDays - 1} days before check-in',
-            outcome: '${100 - partialPct}% refund',
-            good: false,
-          ),
-          const SizedBox(height: 10),
-          _PolicyRow(
-            days: 'Day before or day of check-in',
-            outcome: 'No refund',
-            good: false,
-          ),
-        ],
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.error, width: 1),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.info_outline_rounded,
+                color: AppColors.error, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Review the cancellation policy',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5,
+                      color: AppColors.dark,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Make sure you're comfortable with this listing's "
+                    "${type.label} cancellation terms before you book.",
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.grey,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Row(
+                    children: [
+                      Text(
+                        'View cancellation policy',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 16, color: AppColors.primary),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -503,42 +536,3 @@ class _StepperButton extends StatelessWidget {
   }
 }
 
-/// One row of the cancellation-policy summary shown before a guest
-/// confirms a booking - a plain-language readout of
-/// CancellationPolicy's tiers so there are no surprises later.
-class _PolicyRow extends StatelessWidget {
-  final String days;
-  final String outcome;
-  final bool good;
-
-  const _PolicyRow({required this.days, required this.outcome, required this.good});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          good ? Icons.check_circle_outline : Icons.remove_circle_outline,
-          size: 16,
-          color: good ? Colors.green[700] : AppColors.grey,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            days,
-            style: const TextStyle(fontSize: 12.5, color: AppColors.dark),
-          ),
-        ),
-        Text(
-          outcome,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            color: good ? Colors.green[700] : AppColors.dark,
-          ),
-        ),
-      ],
-    );
-  }
-}

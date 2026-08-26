@@ -38,6 +38,17 @@ class Place {
   final String? highlight1Description;
   final String? highlight2Title;
   final String? highlight2Description;
+  // Which of the three cancellation policies this listing uses - one
+  // of 'flexible' | 'moderate' | 'strict' (see
+  // schema_cancellation_policy_type.sql). 'moderate' is the DB
+  // default, so every listing created before this feature behaves
+  // exactly as it always did. The two flexible* fields are only ever
+  // set when cancellationPolicyType == 'flexible' - the host's own
+  // chosen free-cancellation cutoff (in days before check-in) and the
+  // fee percentage that applies after it (see CancellationPolicy).
+  final String cancellationPolicyType;
+  final int? cancellationFlexibleFreeDays;
+  final num? cancellationFlexibleFeePercent;
 
   Place({
     required this.id,
@@ -65,6 +76,9 @@ class Place {
     this.highlight1Description,
     this.highlight2Title,
     this.highlight2Description,
+    this.cancellationPolicyType = 'moderate',
+    this.cancellationFlexibleFreeDays,
+    this.cancellationFlexibleFeePercent,
   });
   bool get isDraft => status == 'draft';
   bool get isPaused => status == 'paused';
@@ -109,6 +123,15 @@ class Place {
       // learn nothing about how to actually get in, so it only
       // counts as answered once the host has described it themselves.
       missing.add('a description of your check-in method');
+    }
+    if (place.cancellationPolicyType == 'flexible' &&
+        (place.cancellationFlexibleFreeDays == null ||
+            place.cancellationFlexibleFeePercent == null)) {
+      // A Flexible listing with no chosen cutoff/fee yet is an
+      // unfinished policy, not a valid one - same idea as "Other"
+      // check-in above, this only counts as answered once the host
+      // has actually filled in their own numbers.
+      missing.add('your custom cancellation policy details');
     }
     return missing;
   }
@@ -171,6 +194,12 @@ class Place {
       highlight1Description: map['highlight1_description'] as String?,
       highlight2Title: map['highlight2_title'] as String?,
       highlight2Description: map['highlight2_description'] as String?,
+      cancellationPolicyType:
+          map['cancellation_policy_type'] as String? ?? 'moderate',
+      cancellationFlexibleFreeDays:
+          map['cancellation_flexible_free_days'] as int?,
+      cancellationFlexibleFeePercent:
+          map['cancellation_flexible_fee_percent'] as num?,
     );
   }
 

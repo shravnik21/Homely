@@ -236,7 +236,7 @@ class NotificationsService {
     final response = await _client
         .from('bookings')
         .select(
-            '*, places(title, address, city_id, price_per_night, max_guests, host_id, cities(name), place_images(image_url, sort_order), host_public_info(full_name))')
+            '*, places(title, address, city_id, price_per_night, max_guests, host_id, host_public_info(full_name), cancellation_policy_type, cancellation_flexible_free_days, cancellation_flexible_fee_percent, cities(name), place_images(image_url, sort_order))')
         .eq('id', bookingId)
         .eq('user_id', userId)
         .maybeSingle();

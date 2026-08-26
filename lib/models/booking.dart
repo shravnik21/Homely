@@ -47,6 +47,16 @@ class Booking {
   // BOOKING is active, this tracks whether the guest has actually
   // confirmed arriving.
   final DateTime? checkedInAt;
+  // The listing's cancellation policy AT THE TIME THIS QUERY RAN -
+  // read straight off the joined `places` row (see
+  // BookingService.getUserBookings), not stored on the booking itself.
+  // Used to compute the real fee/refund on cancel (see
+  // BookingDetailScreen._confirmCancel) so that calculation always
+  // matches whichever policy the host currently has selected, the
+  // same way pricePerNight/maxGuests above already work.
+  final String cancellationPolicyType;
+  final int? cancellationFlexibleFreeDays;
+  final num? cancellationFlexibleFeePercent;
 
   Booking({
     required this.id,
@@ -72,6 +82,9 @@ class Booking {
     this.previousCheckIn,
     this.previousCheckOut,
     this.checkedInAt,
+    this.cancellationPolicyType = 'moderate',
+    this.cancellationFlexibleFreeDays,
+    this.cancellationFlexibleFeePercent,
   });
 
   int get nights => checkOut.difference(checkIn).inDays;
@@ -184,6 +197,12 @@ class Booking {
       checkedInAt: map['checked_in_at'] != null
           ? DateTime.parse(map['checked_in_at'] as String)
           : null,
+      cancellationPolicyType:
+          place['cancellation_policy_type'] as String? ?? 'moderate',
+      cancellationFlexibleFreeDays:
+          place['cancellation_flexible_free_days'] as int?,
+      cancellationFlexibleFeePercent:
+          place['cancellation_flexible_fee_percent'] as num?,
     );
   }
 }

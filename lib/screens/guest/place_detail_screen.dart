@@ -5,6 +5,8 @@ import 'package:homely_app/config/checkin_methods.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/models/review.dart';
 import 'package:homely_app/screens/guest/booking_screen.dart';
+import 'package:homely_app/screens/guest/cancellation_policy_detail_screen.dart';
+import 'package:homely_app/services/cancellation_policy.dart';
 import 'package:homely_app/services/review_service.dart';
 import 'package:homely_app/services/wishlist_service.dart';
 import 'package:homely_app/widgets/review_tile.dart';
@@ -189,6 +191,9 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
 
                   const SizedBox(height: 24),
                   _buildHostCard(place),
+
+                  const SizedBox(height: 16),
+                  _buildCancellationPolicyCard(context, place),
                 ],
               ),
             ),
@@ -340,6 +345,64 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ---- Cancellation Policy card - white bg / red border, distinct
+  // from every other card on this screen (which use lightGrey), since
+  // this is information the guest specifically needs to notice before
+  // booking, not just background detail. Tapping it opens the full
+  // breakdown of whichever policy (Flexible/Moderate/Strict) the host
+  // picked for this listing - see CancellationPolicyDetailScreen. ----
+  Widget _buildCancellationPolicyCard(BuildContext context, Place place) {
+    final type = CancellationPolicyTypeX.fromDb(place.cancellationPolicyType);
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CancellationPolicyDetailScreen(place: place),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.error, width: 1),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event_busy_outlined,
+                color: AppColors.error, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Cancellation Policy',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${type.label} - tap to see full details',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.dark,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: AppColors.error, size: 22),
+          ],
+        ),
       ),
     );
   }

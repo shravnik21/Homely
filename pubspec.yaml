@@ -34,6 +34,32 @@ dependencies:
   # Picking government ID photo for host verification
   image_picker: ^1.1.2
 
+  # Interactive map for the host "drop a pin" location step + guest-
+  # facing map preview - flutter_map + OpenStreetMap tiles instead of
+  # google_maps_flutter, since this needs no API key and no billing
+  # account at all (see lib/services/location_service.dart).
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+  # "Use my current location" on the wizard's map step, and centering
+  # the guest-facing map on the device's own position when useful
+  geolocator: ^13.0.1
+
+  # Turns a host's typed city into an approximate lat/lng so the
+  # wizard's map starts centered somewhere sensible before they drop
+  # a pin - uses the OS's own geocoder (Apple/Google on-device), not
+  # a separate Google API, so it needs no extra API key.
+  geocoding: ^3.0.0
+
+  # Free-text place search on the wizard's map (search-as-you-type,
+  # tap a result to jump there) via OpenStreetMap's Nominatim API -
+  # see LocationService.searchPlaces. Plain HTTP call, no API key.
+  http: ^1.2.2
+
+  # Opens the device's native Maps app for turn-by-turn directions
+  # from the guest-facing Place Detail screen (see maps_launcher.dart)
+  url_launcher: ^6.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

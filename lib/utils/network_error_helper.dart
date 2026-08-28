@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 /// [ConnectivityGate] only catches the "device has no network
@@ -13,6 +14,7 @@ import 'dart:io';
 /// the raw exception text.
 bool isNetworkError(Object error) {
   if (error is SocketException) return true;
+  if (error is TimeoutException) return true;
 
   final message = error.toString().toLowerCase();
   const networkKeywords = [
@@ -26,6 +28,7 @@ bool isNetworkError(Object error) {
     'clientexception',
     'software caused connection abort',
     'no address associated with hostname',
+    'timeoutexception',
   ];
   return networkKeywords.any(message.contains);
 }

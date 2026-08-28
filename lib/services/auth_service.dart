@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:homely_app/config/supabase_config.dart';
 
@@ -12,23 +13,28 @@ class AuthService {
 
   bool get isLoggedIn => currentUser != null;
 
+  /// Same reasoning as [signIn] - a 15s timeout so a hung connection
+  /// surfaces as a real error instead of leaving the sign-up button
+  /// spinning forever.
   Future<AuthResponse> signUp({
     required String fullName,
     required String email,
     required String password,
     String role = 'guest', // 'guest' or 'host'
   }) async {
-    return await _client.auth.signUp(
-      email: email,
-      password: password,
-      data: {
-        'full_name': fullName,
-        'role': role,
-        // Hosts see a one-time onboarding carousel before reaching
-        // HostHomeScreen; guests don't need this flag at all.
-        'host_onboarding_completed': false,
-      },
-    );
+    return await _client.auth
+        .signUp(
+          email: email,
+          password: password,
+          data: {
+            'full_name': fullName,
+            'role': role,
+            // Hosts see a one-time onboarding carousel before reaching
+            // HostHomeScreen; guests don't need this flag at all.
+            'host_onboarding_completed': false,
+          },
+        )
+        .timeout(const Duration(seconds: 15));
   }
 
   /// 'guest' or 'host', read from the signed-in user's metadata
@@ -69,14 +75,21 @@ class AuthService {
     }
   }
 
+  /// 15s timeout - without this, a request that never gets a response
+  /// from the network (hung TCP connection, blocked/filtered host,
+  /// etc.) leaves the caller awaiting forever with no error and no
+  /// way to show the user anything. This turns that silent hang into
+  /// a real, catchable [TimeoutException] instead.
   Future<AuthResponse> signIn({
     required String email,
     required String password,
   }) async {
-    return await _client.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+    return await _client.auth
+        .signInWithPassword(
+          email: email,
+          password: password,
+        )
+        .timeout(const Duration(seconds: 15));
   }
 
   Future<void> signOut() async {

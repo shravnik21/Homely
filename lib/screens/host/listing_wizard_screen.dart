@@ -113,9 +113,13 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   String? _cityId;
   String? _cityName;
   // Address is collected as separate, Airbnb-style fields for a much
-  // clearer entry experience, then joined into a single string right
-  // before it's saved - the `address` column in the DB stays exactly
-  // as it was, no schema change needed.
+  // clearer entry experience. Each field is now also saved to its
+  // own column (flat_house_no/street/landmark/pincode - see
+  // schema_address_components.sql) so re-opening a listing to edit
+  // it can prefill them separately; they're additionally joined into
+  // a single string for the existing `address` column, which every
+  // other part of the app (guest listing pages, directions, etc.)
+  // still reads unchanged.
   final _flatController = TextEditingController(); // Flat/House no., Building/Society
   final _streetController = TextEditingController(); // Street / Area / Locality
   final _landmarkController = TextEditingController(); // optional
@@ -195,12 +199,24 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     _cityId = place.cityId;
     _cityName = place.cityName.isEmpty ? null : place.cityName;
     _cityController.text = _cityName ?? '';
-    // The DB only ever stored one joined address string, so there are
-    // no separate components to recover here - drop the saved value
-    // into the Street / Area field as a sensible best-effort default
-    // and let the host redistribute it across the new fields if they
-    // want to; nothing is lost, it's just no longer pre-split.
-    _streetController.text = place.address;
+    // Newer listings have their address components saved separately
+    // (see schema_address_components.sql) - prefill each field
+    // exactly as the host left it. Older listings created before
+    // that migration have these as null, so fall back to dropping
+    // the old joined address string into the Street field as a
+    // sensible best-effort default, same as before - nothing is
+    // lost, it's just no longer pre-split for those.
+    if (place.flatHouseNo != null ||
+        place.street != null ||
+        place.landmark != null ||
+        place.pincode != null) {
+      _flatController.text = place.flatHouseNo ?? '';
+      _streetController.text = place.street ?? '';
+      _landmarkController.text = place.landmark ?? '';
+      _pincodeController.text = place.pincode ?? '';
+    } else {
+      _streetController.text = place.address;
+    }
     if (place.latitude != null && place.longitude != null) {
       _pinLocation = LatLng(place.latitude!, place.longitude!);
     }
@@ -331,10 +347,29 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     );
   }
 
+  /// Unlike _goNext, backward navigation was never actually saving
+  /// the step being left - a host who edited Location (or any step)
+  /// and then tapped the app-bar back arrow instead of "Next" would
+  /// have their edits silently discarded from the database, even
+  /// though the fields still looked filled-in on screen (that's just
+  /// local widget state, not what's saved). Persisting here too,
+  /// fire-and-forget/backgrounded exactly like _goNext's non-blocking
+  /// branch, closes that gap without slowing down back navigation.
   void _goBack() {
     if (_currentStep == 0) {
       Navigator.of(context).pop();
       return;
+    }
+    if (_currentStep != 0 || _type != null) {
+      _persistStep(_currentStep).catchError((e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content:
+                    Text(friendlyError(e, fallback: 'Could not save this step.'))),
+          );
+        }
+      });
     }
     setState(() {
       _stepError = null;
@@ -457,6 +492,14 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
         await _listingService.updateListing(_placeId!, {
           'city_id': _cityId,
           'address': _buildAddress(),
+          // Saved alongside the joined `address` string purely so
+          // re-opening this listing to edit it can prefill each field
+          // separately instead of dumping the whole address into one
+          // box - see schema_address_components.sql.
+          'flat_house_no': _orNull(_flatController),
+          'street': _orNull(_streetController),
+          'landmark': _orNull(_landmarkController),
+          'pincode': _orNull(_pincodeController),
           'latitude': _pinLocation?.latitude,
           'longitude': _pinLocation?.longitude,
         });
@@ -528,7 +571,10 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
         // a read-only summary of everything already collected - so
         // save the same set _saveDraftFromReview/_publish do instead
         // of a step index the switch in _persistStep has no case for
-        // (which silently did nothing here before).
+        // (which silently did nothing here before). Step 1 is
+        // included here too - _goBack now saves it on the way back,
+        // but this re-save stays as a belt-and-suspenders backstop.
+        await _persistStep(1);
         await _persistStep(2);
         await _persistStep(4);
         await _persistStep(5);
@@ -572,6 +618,10 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       bedrooms: _bedrooms,
       bathrooms: _bathrooms,
       address: _buildAddress(),
+      flatHouseNo: _orNull(_flatController),
+      street: _orNull(_streetController),
+      landmark: _orNull(_landmarkController),
+      pincode: _orNull(_pincodeController),
       latitude: _pinLocation?.latitude,
       longitude: _pinLocation?.longitude,
       description: _descriptionController.text.trim(),
@@ -615,6 +665,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       // Persist whatever the review step itself doesn't already cover
       // (belt-and-suspenders in case an earlier step's Next was
       // skipped via direct navigation) then flip status.
+      await _persistStep(1);
       await _persistStep(2);
       await _persistStep(4);
       await _persistStep(5);
@@ -637,6 +688,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   Future<void> _saveDraftFromReview() async {
     setState(() => _isBusy = true);
     try {
+      await _persistStep(1);
       await _persistStep(2);
       await _persistStep(4);
       await _persistStep(5);

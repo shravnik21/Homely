@@ -11,6 +11,17 @@ class Place {
   final int bedrooms;
   final int bathrooms;
   final String address;
+  // Separate address components, saved alongside `address` (see
+  // schema_address_components.sql) purely so the listing wizard can
+  // prefill its own separate fields when a host edits an existing
+  // listing - `address` itself stays the single joined string
+  // everywhere else in the app reads (guest listing pages,
+  // directions, etc.). Null for listings created before this
+  // migration existed.
+  final String? flatHouseNo;
+  final String? street;
+  final String? landmark;
+  final String? pincode;
   final String description;
   final List<String> amenities;
   final List<String> photoUrls;
@@ -61,6 +72,10 @@ class Place {
     required this.bedrooms,
     required this.bathrooms,
     required this.address,
+    this.flatHouseNo,
+    this.street,
+    this.landmark,
+    this.pincode,
     required this.description,
     required this.amenities,
     required this.photoUrls,
@@ -176,6 +191,10 @@ class Place {
       bedrooms: map['bedrooms'] as int? ?? 1,
       bathrooms: map['bathrooms'] as int? ?? 1,
       address: map['address'] as String? ?? '',
+      flatHouseNo: map['flat_house_no'] as String?,
+      street: map['street'] as String?,
+      landmark: map['landmark'] as String?,
+      pincode: map['pincode'] as String?,
       description: map['description'] as String? ?? '',
       amenities: (map['amenities'] as List<dynamic>? ?? [])
           .map((e) => e.toString())

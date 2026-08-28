@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Needed for the "Use my current location" button on the host
+         wizard's map step (geolocator). Fine location is what
+         actually centers the map accurately; coarse is requested too
+         since some OEMs only grant that. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="homely_app"
         android:name="${applicationName}"

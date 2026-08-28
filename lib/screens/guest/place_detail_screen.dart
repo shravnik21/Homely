@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/config/checkin_methods.dart';
 import 'package:homely_app/models/place.dart';
@@ -9,6 +11,7 @@ import 'package:homely_app/screens/guest/cancellation_policy_detail_screen.dart'
 import 'package:homely_app/services/cancellation_policy.dart';
 import 'package:homely_app/services/review_service.dart';
 import 'package:homely_app/services/wishlist_service.dart';
+import 'package:homely_app/utils/maps_launcher.dart';
 import 'package:homely_app/widgets/review_tile.dart';
 //import 'package:homely_app/widgets/star_rating.dart';
 
@@ -185,6 +188,9 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                       ),
                     ),
                   ],
+
+                  const SizedBox(height: 24),
+                  _buildLocationSection(context, place),
 
                   const SizedBox(height: 24),
                   _buildReviewsSection(),
@@ -404,6 +410,101 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // ---- Location - a small map preview centered on the host's
+  // dropped pin (see the wizard's "Pin the exact location" step),
+  // with a "Get Directions" button that opens the device's own Maps
+  // app (see MapsLauncher). Older listings created before that step
+  // existed have no pin, so this falls back to directions built from
+  // the address text instead - the button still works, it's just
+  // less precise. ----
+  Widget _buildLocationSection(BuildContext context, Place place) {
+    final hasPin = place.latitude != null && place.longitude != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Location',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: AppColors.dark,
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (hasPin) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              height: 160,
+              child: IgnorePointer(
+                // A small preview, not something the guest needs to
+                // pan/zoom in place - "Get Directions" below is the
+                // real action, this is just to show roughly where the
+                // place is at a glance.
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: LatLng(place.latitude!, place.longitude!),
+                    initialZoom: 14.5,
+                    interactionOptions:
+                        const InteractionOptions(flags: InteractiveFlag.none),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.homely.homely_app',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(place.latitude!, place.longitude!),
+                          width: 40,
+                          height: 40,
+                          alignment: Alignment.topCenter,
+                          child: const Icon(
+                            Icons.location_pin,
+                            color: AppColors.error,
+                            size: 40,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        OutlinedButton.icon(
+          onPressed: () => hasPin
+              ? MapsLauncher.openDirections(
+                  latitude: place.latitude!,
+                  longitude: place.longitude!,
+                )
+              : MapsLauncher.openDirectionsToAddress(
+                  '${place.address}, ${place.cityName}, India'),
+          icon: const Icon(Icons.directions_rounded, size: 18),
+          label: const Text('Get Directions'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 46),
+            foregroundColor: AppColors.primary,
+            side: const BorderSide(color: AppColors.primary),
+          ),
+        ),
+        if (!hasPin) ...[
+          const SizedBox(height: 6),
+          const Text(
+            "This host hasn't pinned an exact location yet, so "
+            "directions are based on the address above.",
+            style: TextStyle(fontSize: 11.5, color: AppColors.grey, height: 1.4),
+          ),
+        ],
+      ],
     );
   }
 

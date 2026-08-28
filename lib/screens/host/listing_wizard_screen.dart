@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homely_app/config/app_theme.dart';
@@ -7,9 +10,11 @@ import 'package:homely_app/models/place.dart';
 import 'package:homely_app/config/checkin_methods.dart';
 import 'package:homely_app/services/cancellation_policy.dart';
 import 'package:homely_app/services/listing_service.dart';
+import 'package:homely_app/services/location_service.dart';
 import 'package:homely_app/widgets/custom_textfield.dart';
 import 'package:homely_app/widgets/primary_button.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
+import 'fullscreen_map_picker_screen.dart';
 
 const List<String> kPropertyTypes = [
   'villa',
@@ -116,6 +121,30 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   final _landmarkController = TextEditingController(); // optional
   final _pincodeController = TextEditingController(); // optional
 
+  // ---- Map pin (optional) - the exact lat/lng a host drops on the
+  // map, saved to places.latitude/longitude (see
+  // schema_host_listings.sql). Entirely optional: a listing with no
+  // pin still works exactly as it always has, guests just fall back
+  // to address-based directions instead of pin-based ones (see
+  // MapsLauncher.openDirectionsToAddress on the guest side). ----
+  static const _locationService = LocationService();
+  LatLng? _pinLocation;
+  // flutter_map's controller is ready to use as soon as it's
+  // constructed - unlike GoogleMapController, there's no async
+  // "onMapCreated" handoff to wait for.
+  final MapController _mapController = MapController();
+  bool _locatingCity = false;
+  bool _locatingCurrent = false;
+
+  // ---- Map search box - lets the host type any place name and jump
+  // the map there, rather than only being able to drop a pin by
+  // tapping or fall back on the typed street/city address. ----
+  final _mapSearchController = TextEditingController();
+  final _mapSearchFocus = FocusNode();
+  Timer? _mapSearchDebounce;
+  List<PlaceSearchResult> _mapSearchResults = [];
+  bool _mapSearching = false;
+
   final _titleController = TextEditingController();
   int _bedrooms = 1;
   int _bathrooms = 1;
@@ -172,6 +201,9 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
     // and let the host redistribute it across the new fields if they
     // want to; nothing is lost, it's just no longer pre-split.
     _streetController.text = place.address;
+    if (place.latitude != null && place.longitude != null) {
+      _pinLocation = LatLng(place.latitude!, place.longitude!);
+    }
     _titleController.text =
         place.title == 'Untitled listing' ? '' : place.title;
     _bedrooms = place.bedrooms;
@@ -221,6 +253,9 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    _mapSearchController.dispose();
+    _mapSearchFocus.dispose();
+    _mapSearchDebounce?.cancel();
     _cityController.dispose();
     _flatController.dispose();
     _streetController.dispose();
@@ -422,6 +457,8 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
         await _listingService.updateListing(_placeId!, {
           'city_id': _cityId,
           'address': _buildAddress(),
+          'latitude': _pinLocation?.latitude,
+          'longitude': _pinLocation?.longitude,
         });
         break;
       case 2:
@@ -535,6 +572,8 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       bedrooms: _bedrooms,
       bathrooms: _bathrooms,
       address: _buildAddress(),
+      latitude: _pinLocation?.latitude,
+      longitude: _pinLocation?.longitude,
       description: _descriptionController.text.trim(),
       amenities: _amenities.toList(),
       photoUrls: _photos
@@ -854,8 +893,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Listings can now be added in any city in India. '
-            'Dropping a pin on a map is coming in a future update.',
+            'Listings can now be added in any city in India.',
             style: TextStyle(color: AppColors.grey, fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 20),
@@ -898,9 +936,353 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
             hint: 'e.g. 403516',
             keyboardType: TextInputType.number,
           ),
+          const SizedBox(height: 24),
+          _buildMapPinSection(),
         ],
       ),
     );
+  }
+
+  /// Optional "drop a pin" map - lets a host mark the property's exact
+  /// coordinates rather than relying on the typed address alone. Not
+  /// required to publish: a listing with no pin still works exactly
+  /// as it always has, guests just get address-based directions
+  /// instead of pin-based ones (see MapsLauncher on the guest side).
+  Widget _buildMapPinSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Pin the exact location',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        const SizedBox(height: 4),
+        const Text(
+          'Optional, but this is what lets guests get accurate turn-by-turn '
+          'directions once they book. Tap anywhere on the map to drop or '
+          'move the pin.',
+          style: TextStyle(color: AppColors.grey, fontSize: 12, height: 1.4),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _locatingCity ? null : _locateTypedCity,
+                icon: _locatingCity
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.search_rounded, size: 16),
+                label:
+                    const Text('Find on map', style: TextStyle(fontSize: 12.5)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _locatingCurrent ? null : _useCurrentLocation,
+                icon: _locatingCurrent
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.my_location_rounded, size: 16),
+                label: const Text('Use my location',
+                    style: TextStyle(fontSize: 12.5)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                height: 220,
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter:
+                        _pinLocation ?? const LatLng(20.5937, 78.9629),
+                    initialZoom: _pinLocation != null ? 15 : 4.4,
+                    onTap: (tapPosition, point) {
+                      // A manual tap always wins - it clears any open
+                      // search dropdown and drops the pin exactly
+                      // where the host tapped, for fine-tuning after
+                      // a search has gotten them close.
+                      _mapSearchFocus.unfocus();
+                      setState(() {
+                        _pinLocation = point;
+                        _mapSearchResults = [];
+                      });
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      // OpenStreetMap's own free tile server - no API
+                      // key or billing account needed.
+                      // userAgentPackageName is required by their
+                      // usage policy so requests can be
+                      // identified/rate-limited per app, not per
+                      // random client.
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.homely.homely_app',
+                    ),
+                    if (_pinLocation != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _pinLocation!,
+                            width: 40,
+                            height: 40,
+                            alignment: Alignment.topCenter,
+                            child: const Icon(
+                              Icons.location_pin,
+                              color: AppColors.error,
+                              size: 40,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            // ---- Expand button - opens the same map full-screen,
+            // since the small preview box is too cramped to search
+            // and place a pin precisely. ----
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: Material(
+                color: AppColors.white,
+                shape: const CircleBorder(),
+                elevation: 3,
+                shadowColor: Colors.black26,
+                child: IconButton(
+                  icon: const Icon(Icons.open_in_full_rounded,
+                      size: 18, color: AppColors.dark),
+                  onPressed: _openFullScreenMap,
+                  tooltip: 'Expand map',
+                ),
+              ),
+            ),
+            // ---- Search box, floating on top of the map itself, and
+            // its results dropdown right below it. ----
+            Positioned(
+              top: 10,
+              left: 10,
+              right: 10,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Material(
+                    borderRadius: BorderRadius.circular(12),
+                    elevation: 3,
+                    shadowColor: Colors.black26,
+                    child: TextField(
+                      controller: _mapSearchController,
+                      focusNode: _mapSearchFocus,
+                      onChanged: _onMapSearchChanged,
+                      style: const TextStyle(fontSize: 13.5),
+                      decoration: InputDecoration(
+                        hintText: 'Search for any location...',
+                        hintStyle: const TextStyle(fontSize: 13),
+                        filled: true,
+                        fillColor: AppColors.white,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 10),
+                        prefixIcon: _mapSearching
+                            ? const Padding(
+                                padding: EdgeInsets.all(14),
+                                child: SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2),
+                                ),
+                              )
+                            : const Icon(Icons.search_rounded, size: 20),
+                        suffixIcon: _mapSearchController.text.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close_rounded, size: 18),
+                                onPressed: _clearMapSearch,
+                              ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_mapSearchResults.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      constraints: const BoxConstraints(maxHeight: 160),
+                      child: Material(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        elevation: 4,
+                        shadowColor: Colors.black26,
+                        clipBehavior: Clip.antiAlias,
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          itemCount: _mapSearchResults.length,
+                          separatorBuilder: (_, __) => const Divider(
+                              height: 1, color: AppColors.lightGrey),
+                          itemBuilder: (context, index) {
+                            final result = _mapSearchResults[index];
+                            return ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.place_outlined,
+                                  size: 18, color: AppColors.grey),
+                              title: Text(
+                                result.displayName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12.5),
+                              ),
+                              onTap: () => _selectMapSearchResult(result),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (_pinLocation != null) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${_pinLocation!.latitude.toStringAsFixed(5)}, '
+                  '${_pinLocation!.longitude.toStringAsFixed(5)}',
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.grey),
+                ),
+              ),
+              TextButton(
+                onPressed: () => setState(() => _pinLocation = null),
+                child: const Text('Clear pin', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// "Find on map" - geocodes whatever street/city text the host has
+  /// typed so far via the device's own geocoder (see
+  /// LocationService.geocodeCity), then recenters the map there. A
+  /// starting point, not a replacement for dragging the pin onto the
+  /// actual doorstep.
+  Future<void> _locateTypedCity() async {
+    final city = _cityController.text.trim();
+    if (city.isEmpty) {
+      setState(
+          () => _stepError = 'Type a city first, then tap "Find on map".');
+      return;
+    }
+    setState(() {
+      _locatingCity = true;
+      _stepError = null;
+    });
+    final query = [_streetController.text.trim(), city]
+        .where((s) => s.isNotEmpty)
+        .join(', ');
+    final result = await _locationService.geocodeCity(query);
+    if (!mounted) return;
+    setState(() => _locatingCity = false);
+    if (result == null) {
+      setState(() => _stepError =
+          "Couldn't find that on the map - try dropping the pin manually.");
+      return;
+    }
+    setState(() => _pinLocation = result);
+    _mapController.move(result, 15);
+  }
+
+  /// "Use my location" - centers the pin on wherever the host's own
+  /// device currently is, useful when they're filling out the wizard
+  /// while standing at the property itself.
+  Future<void> _useCurrentLocation() async {
+    setState(() => _locatingCurrent = true);
+    final result = await _locationService.getCurrentLocation();
+    if (!mounted) return;
+    setState(() => _locatingCurrent = false);
+    if (result == null) {
+      setState(() => _stepError = "Couldn't get your current location - "
+          "check location permissions, or drop the pin manually.");
+      return;
+    }
+    setState(() => _pinLocation = result);
+    _mapController.move(result, 15);
+  }
+
+  /// Debounces the map search box so a request only fires ~450ms
+  /// after the host stops typing, rather than on every keystroke -
+  /// both kinder to Nominatim's free API and avoids a flickering
+  /// results list.
+  void _onMapSearchChanged(String query) {
+    _mapSearchDebounce?.cancel();
+    setState(() {}); // updates the clear (x) button's visibility
+    if (query.trim().isEmpty) {
+      setState(() => _mapSearchResults = []);
+      return;
+    }
+    _mapSearchDebounce = Timer(const Duration(milliseconds: 450), () async {
+      setState(() => _mapSearching = true);
+      final results = await _locationService.searchPlaces(query);
+      if (!mounted) return;
+      setState(() {
+        _mapSearching = false;
+        _mapSearchResults = results;
+      });
+    });
+  }
+
+  /// A host tapped one of the search results - jump the map there,
+  /// drop the pin, and close the dropdown/keyboard.
+  void _selectMapSearchResult(PlaceSearchResult result) {
+    _mapSearchFocus.unfocus();
+    setState(() {
+      _pinLocation = result.location;
+      _mapSearchResults = [];
+      _mapSearchController.text = result.displayName;
+    });
+    _mapController.move(result.location, 15);
+  }
+
+  void _clearMapSearch() {
+    setState(() {
+      _mapSearchController.clear();
+      _mapSearchResults = [];
+    });
+  }
+
+  /// The small map box is too cramped to search or place a pin
+  /// precisely - this opens the same picker full-screen instead.
+  /// Whatever pin ends up set there (via search, "use my location,"
+  /// or a direct tap) is handed back and applied to the small map too.
+  Future<void> _openFullScreenMap() async {
+    final result = await Navigator.of(context).push<LatLng?>(
+      MaterialPageRoute(
+        builder: (_) => FullScreenMapPickerScreen(initialLocation: _pinLocation),
+        fullscreenDialog: true,
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() => _pinLocation = result);
+    _mapController.move(result, 15);
   }
 
   // ---- Step 3: Basics ----
@@ -1574,6 +1956,7 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
               : _titleController.text.trim()),
           row('City', _cityName ?? '—'),
           row('Address', _buildAddress().isEmpty ? '—' : _buildAddress()),
+          row('Map pin', _pinLocation != null ? 'Dropped' : 'Not set (optional)'),
           row('Beds / Baths', '$_bedrooms / $_bathrooms'),
           row('Max guests', '$_maxGuests'),
           row('Price', _priceController.text.trim().isEmpty

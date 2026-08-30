@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
 import 'package:homely_app/services/booking_service.dart';
 import 'package:homely_app/services/cancellation_policy.dart';
+import 'package:homely_app/services/payment_service.dart';
 import 'package:homely_app/screens/guest/booking_confirmation_screen.dart';
 import 'package:homely_app/screens/guest/cancellation_policy_detail_screen.dart';
 import 'package:homely_app/widgets/availability_date_range_sheet.dart';
@@ -19,11 +22,28 @@ class BookingScreen extends StatefulWidget {
 
 class _BookingScreenState extends State<BookingScreen> {
   final BookingService _bookingService = BookingService();
+  final PaymentService _paymentService = PaymentService();
+  late final Razorpay _razorpay;
 
   DateTime? _checkIn;
   DateTime? _checkOut;
   int _guests = 1;
   bool _isBooking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _razorpay = Razorpay();
+    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
+    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
+  }
+
+  @override
+  void dispose() {
+    _razorpay.clear();
+    super.dispose();
+  }
 
   int get _nights =>
       (_checkIn != null && _checkOut != null)
@@ -62,8 +82,61 @@ class _BookingScreenState extends State<BookingScreen> {
     });
   }
 
+  // Step 1 of 2: ask our own backend what this stay actually costs
+  // and get a Razorpay order for that amount - see
+  // supabase/functions/create-razorpay-order. Nothing gets booked yet;
+  // that only happens in _onPaymentSuccess, once money has actually
+  // moved. This replaces the old flow, which created the `bookings`
+  // row here, before any payment existed at all.
   Future<void> _confirmBooking() async {
     setState(() => _isBooking = true);
+    try {
+      final order = await _paymentService.createOrder(
+        placeId: widget.place.id,
+        checkIn: _checkIn!,
+        checkOut: _checkOut!,
+        guests: _guests,
+      );
+
+      final email = Supabase.instance.client.auth.currentUser?.email;
+      final options = {
+        'key': order.keyId,
+        'amount': order.amount,
+        'currency': order.currency,
+        'order_id': order.orderId,
+        'name': 'Homely',
+        'description': widget.place.title,
+        if (email != null) 'prefill': {'email': email},
+        'theme': {'color': '#E63950'}, // matches AppColors.primary
+      };
+      _razorpay.open(options);
+      // _isBooking stays true while Checkout is open - one of the
+      // three handlers below always fires and resets it, whichever
+      // way the guest exits Checkout.
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isBooking = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(friendlyError(e, fallback: 'Could not start payment.')),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  // Step 2 of 2: payment succeeded - NOW create the actual booking.
+  //
+  // Trusting this client-side callback to create the booking is
+  // temporary and known-imperfect: nothing here stops a modified
+  // client from firing this handler without ever really paying. The
+  // next step in this feature adds server-side verification via a
+  // Razorpay webhook, which will move booking creation there instead
+  // and make this client-side path redundant rather than
+  // load-bearing. Until then, this is still a real improvement over
+  // before - a booking now can't exist without at least a client-
+  // reported successful payment, where previously it required none.
+  Future<void> _onPaymentSuccess(PaymentSuccessResponse response) async {
     try {
       final bookingId = await _bookingService.createBooking(
         placeId: widget.place.id,
@@ -77,11 +150,14 @@ class _BookingScreenState extends State<BookingScreen> {
     } catch (e) {
       if (!mounted) return;
       // A BookingConflictException means someone else grabbed these
-      // exact dates between us loading the calendar and confirming -
-      // the DB's no_overlapping_bookings constraint (see
+      // exact dates while payment was in progress - the DB's
+      // no_overlapping_bookings constraint (see
       // schema_no_overlapping_bookings.sql) is what actually caught
       // it. Clear the picked dates so the guest can't just tap
-      // "Confirm" again and hit the same wall.
+      // "Confirm" again and hit the same wall. Payment has already
+      // gone through at this point - a refund still needs to be
+      // handled (not yet built), so this case is flagged clearly
+      // rather than silently treated like an ordinary booking error.
       final isConflict = e is BookingConflictException;
       if (isConflict) {
         setState(() {
@@ -91,13 +167,39 @@ class _BookingScreenState extends State<BookingScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isConflict ? e.toString() : friendlyError(e, fallback: 'Booking failed.')),
+          content: Text(
+            isConflict
+                ? '${e.toString()} Your payment went through - contact support for a refund.'
+                : friendlyError(e, fallback: 'Booking failed after payment. Contact support.'),
+          ),
           backgroundColor: AppColors.error,
         ),
       );
     } finally {
       if (mounted) setState(() => _isBooking = false);
     }
+  }
+
+  void _onPaymentError(PaymentFailureResponse response) {
+    if (!mounted) return;
+    setState(() => _isBooking = false);
+    // response.message is Razorpay's own description (e.g. "Payment
+    // Cancelled", card declined, etc.) - safe to show as-is, it's
+    // already guest-facing copy from the SDK.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(response.message ?? 'Payment was not completed.'),
+        backgroundColor: AppColors.error,
+      ),
+    );
+  }
+
+  void _onExternalWallet(ExternalWalletResponse response) {
+    if (!mounted) return;
+    setState(() => _isBooking = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Opened ${response.walletName ?? 'external wallet'} - complete payment there to finish booking.')),
+    );
   }
 
   void _showSuccessDialog(String bookingId) {

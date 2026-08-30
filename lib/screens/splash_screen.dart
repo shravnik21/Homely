@@ -46,31 +46,45 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: AppColors.primary,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.holiday_village_rounded,
-                color: Colors.white, size: 90),
-            SizedBox(height: 16),
-            Text(
+            ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Image.asset(
+                'assets/images/app_icon.png',
+                width: 120,
+                height: 120,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
               'Homely',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 32,
+                fontSize: 34,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 1,
+                letterSpacing: 0.5,
               ),
             ),
-            SizedBox(height: 8),
-            Text(
+            const SizedBox(height: 8),
+            const Text(
               'Farmhouses • Villas • Flats • Apartments',
               style: TextStyle(color: Colors.white70, fontSize: 13),
             ),
-            SizedBox(height: 40),
-            CircularProgressIndicator(color: Colors.white),
+            const SizedBox(height: 48),
+            const SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2.4,
+              ),
+            ),
           ],
         ),
       ),

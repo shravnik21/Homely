@@ -14,6 +14,10 @@ dependencies:
   # Supabase
   supabase_flutter: ^2.5.6
 
+  # Razorpay Checkout - opens the native payment sheet using the
+  # order created by the create-razorpay-order Edge Function
+  razorpay_flutter: ^1.4.5
+
   # Detecting when the device comes back online, to auto-reload
   # screens that failed to load while offline (see AutoReloadOnReconnectMixin)
   connectivity_plus: ^6.0.3

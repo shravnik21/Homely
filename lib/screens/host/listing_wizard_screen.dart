@@ -215,7 +215,11 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       _landmarkController.text = place.landmark ?? '';
       _pincodeController.text = place.pincode ?? '';
     } else {
-      _streetController.text = place.address;
+      final split = _splitLegacyAddress(place.address);
+      _flatController.text = split.flat;
+      _streetController.text = split.street;
+      _landmarkController.text = split.landmark;
+      _pincodeController.text = split.pincode;
     }
     if (place.latitude != null && place.longitude != null) {
       _pinLocation = LatLng(place.latitude!, place.longitude!);
@@ -264,6 +268,64 @@ class _ListingWizardScreenState extends State<ListingWizardScreen> {
       _pincodeController.text.trim(),
     ].where((s) => s.isNotEmpty);
     return parts.join(', ');
+  }
+
+  /// Best-effort reverse of [_buildAddress] - only used for listings
+  /// saved before flat_house_no/street/landmark/pincode existed as
+  /// their own columns, so the only thing on record is the one joined
+  /// string. Since we control exactly how that string was built
+  /// ("$flat, $street, near $landmark, $pincode" with any empty part
+  /// skipped), most of it can be pulled back apart reliably:
+  ///
+  /// - A trailing 4-6 digit segment is almost certainly the pincode.
+  /// - A segment starting with "near " is unambiguous - that's
+  ///   always how landmark was prefixed.
+  /// - What's left is comma-joined "$flat, $street" - the flat/house
+  ///   number is conventionally the first short segment, so it's
+  ///   split off if there's more than one segment remaining;
+  ///   otherwise (a single leftover segment) it's ambiguous whether
+  ///   that was ever a separate flat number at all, so the whole
+  ///   thing is kept as Street rather than guessing.
+  ///
+  /// This can't be perfect - a street name that itself starts with a
+  /// number, or a flat number a host once typed with a comma in it,
+  /// will still land somewhere imperfect - but it's strictly better
+  /// than the previous behavior of dumping the entire string into
+  /// Street every single time, and it only ever runs once: as soon as
+  /// the host saves, the real separate columns take over for good.
+  ({String flat, String street, String landmark, String pincode})
+      _splitLegacyAddress(String address) {
+    final segments = address
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (segments.isEmpty) {
+      return (flat: '', street: '', landmark: '', pincode: '');
+    }
+
+    String pincode = '';
+    if (RegExp(r'^\d{4,6}$').hasMatch(segments.last)) {
+      pincode = segments.removeLast();
+    }
+
+    String landmark = '';
+    final landmarkIndex =
+        segments.indexWhere((s) => s.toLowerCase().startsWith('near '));
+    if (landmarkIndex != -1) {
+      landmark = segments.removeAt(landmarkIndex).substring(5).trim();
+    }
+
+    String flat = '';
+    String street;
+    if (segments.length > 1) {
+      flat = segments.removeAt(0);
+      street = segments.join(', ');
+    } else {
+      street = segments.isEmpty ? '' : segments.first;
+    }
+
+    return (flat: flat, street: street, landmark: landmark, pincode: pincode);
   }
 
   @override

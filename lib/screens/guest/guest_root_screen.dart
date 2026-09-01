@@ -26,17 +26,19 @@ class GuestRootScreen extends StatefulWidget {
 }
 
 class _GuestRootScreenState extends State<GuestRootScreen> {
+  static const _tripsTabIndex = 2;
   static const _notificationsTabIndex = 1;
 
   final NotificationsService _notificationsService = NotificationsService();
+  final GlobalKey<MyBookingsScreenState> _tripsKey = GlobalKey<MyBookingsScreenState>();
   int _currentIndex = 0;
   int _unreadNotifications = 0;
 
-  final List<Widget> _tabs = const [
-    HomeScreen(),
-    NotificationsScreen(),
-    MyBookingsScreen(),
-    ProfileScreen(),
+  late final List<Widget> _tabs = [
+    const HomeScreen(),
+    const NotificationsScreen(),
+    MyBookingsScreen(key: _tripsKey),
+    const ProfileScreen(),
   ];
 
   @override
@@ -62,6 +64,14 @@ class _GuestRootScreenState extends State<GuestRootScreen> {
     // itself, so re-check the count right as the guest steps away
     // from it - that's the one moment the badge could be stale.
     if (leavingNotifications) _loadUnreadCount();
+    // IndexedStack builds every tab eagerly and keeps it alive for
+    // the app's whole session, so MyBookingsScreen's own initState
+    // fetch only ever runs once, immediately after login - well
+    // before most bookings even exist yet. Re-fetch every time the
+    // guest actually lands on Trips instead, so it never goes stale.
+    if (index == _tripsTabIndex) {
+      _tripsKey.currentState?.refresh();
+    }
   }
 
   @override

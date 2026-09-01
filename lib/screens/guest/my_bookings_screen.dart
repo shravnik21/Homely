@@ -11,10 +11,16 @@ class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
 
   @override
-  State<MyBookingsScreen> createState() => _MyBookingsScreenState();
+  State<MyBookingsScreen> createState() => MyBookingsScreenState();
 }
 
-class _MyBookingsScreenState extends State<MyBookingsScreen> {
+/// Public (not the usual private `_State`) specifically so
+/// GuestRootScreen can hold a GlobalKey to this and call [refresh]
+/// itself - IndexedStack builds every tab eagerly and keeps it alive
+/// forever, so without this, this screen's one-time initState fetch
+/// would go stale the moment a booking is made/changed elsewhere in
+/// the same session and never update again until the app restarts.
+class MyBookingsScreenState extends State<MyBookingsScreen> {
   final BookingService _bookingService = BookingService();
   late Future<List<Booking>> _bookingsFuture;
 
@@ -33,12 +39,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
 
   // Re-fetches the list - called after returning from the booking
   // details screen if a reschedule/cancel actually happened there,
-  // so the card (dates, status, price) reflects the change.
+  // so the card (dates, status, price) reflects the change. Also
+  // called by GuestRootScreen (via refresh() below) every time the
+  // guest switches to the Trips tab.
   void _refreshBookings() {
     setState(() {
       _bookingsFuture = _bookingService.getUserBookings();
     });
   }
+
+  /// Public entry point for GuestRootScreen to call through its
+  /// GlobalKey whenever the Trips tab becomes the active one.
+  void refresh() => _refreshBookings();
 
   Future<void> _openBookingDetails(Booking booking) async {
     final changed = await Navigator.of(context).push<bool>(

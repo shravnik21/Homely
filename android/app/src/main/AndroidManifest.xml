@@ -30,6 +30,20 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Password-reset magic link deep link: Supabase's
+                 "Reset Password" email points at
+                 homelyapp://reset-callback (see
+                 SupabaseConfig.passwordResetRedirectUrl). This
+                 intent-filter is what makes Android open THIS app for
+                 that link instead of a browser; supabase_flutter
+                 picks it up from there and turns it into a
+                 passwordRecovery auth-state event (see main.dart). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="homelyapp" android:host="reset-callback"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

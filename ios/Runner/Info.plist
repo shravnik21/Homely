@@ -24,6 +24,23 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- Password-reset magic link deep link: Supabase's "Reset
+	     Password" email points at homelyapp://reset-callback (see
+	     SupabaseConfig.passwordResetRedirectUrl). This is what makes
+	     iOS open THIS app for that link instead of Safari;
+	     supabase_flutter picks it up from there and turns it into a
+	     passwordRecovery auth-state event (see main.dart). -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.homely.app.passwordreset</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>homelyapp</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>

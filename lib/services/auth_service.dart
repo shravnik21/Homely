@@ -96,8 +96,32 @@ class AuthService {
     await _client.auth.signOut();
   }
 
+  /// Kicks off password recovery: Supabase emails the account a
+  /// magic link (the dashboard's default "Reset Password" template's
+  /// `{{ .ConfirmationURL }}` button - no template edit needed,
+  /// unlike a code-based flow). `redirectTo` points that link at
+  /// [SupabaseConfig.passwordResetRedirectUrl], the custom scheme
+  /// this app registers natively, so tapping it from the email opens
+  /// Homely directly instead of a browser. Deliberately doesn't throw
+  /// on an unknown email - Supabase itself stays silent either way,
+  /// so this can't be used to check whether an email is registered.
   Future<void> resetPassword(String email) async {
-    await _client.auth.resetPasswordForEmail(email);
+    await _client.auth.resetPasswordForEmail(
+      email,
+      redirectTo: SupabaseConfig.passwordResetRedirectUrl,
+    );
+  }
+
+  /// Sets the new password using the authenticated "recovery" session
+  /// that supabase_flutter automatically establishes when the app is
+  /// opened via the magic link (see main.dart's listener for
+  /// `AuthChangeEvent.passwordRecovery`), then signs out - so the
+  /// person lands back on the normal login screen and signs in fresh
+  /// with their new password, rather than being left in a recovery
+  /// session that behaves subtly differently from a normal one.
+  Future<void> updatePasswordAfterReset(String newPassword) async {
+    await _client.auth.updateUser(UserAttributes(password: newPassword));
+    await signOut();
   }
 
   /// Updates the user's name and phone in TWO places that need to

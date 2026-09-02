@@ -8,6 +8,7 @@ import 'package:homely_app/screens/guest/guest_root_screen.dart';
 import 'package:homely_app/screens/host/host_root_screen.dart';
 import 'package:homely_app/screens/host/host_onboarding_screen.dart';
 import 'package:homely_app/screens/auth/signup_screen.dart';
+import 'package:homely_app/screens/auth/forgot_password_screen.dart';
 import 'package:homely_app/utils/network_error_helper.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -148,7 +149,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {
-                      // forgot password functionality 
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const ForgotPasswordScreen()),
+                      );
                     },
                     child: const Text('Forgot password?'),
                   ),

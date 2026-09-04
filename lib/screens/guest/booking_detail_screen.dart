@@ -802,36 +802,31 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       return;
     }
 
-    // Recompute total price the same way BookingScreen does (5% flat
-    // service fee on top of nights x price-per-night) so a longer or
-    // shorter stay is billed correctly.
-    final subtotal = _booking.pricePerNight * nights;
-    final serviceFee = subtotal * 0.05;
-    final newTotal = subtotal + serviceFee;
-
-    // Captured before the update below so we still have the "old"
-    // dates once _booking is reassigned to the new ones.
+    // Captured before the call below so we still have the "old"
+    // dates once _booking is reassigned to the new ones. The server
+    // records these itself too (reschedule_booking() reads them off
+    // the existing row before overwriting), this copy is purely for
+    // the local optimistic UI update.
     final previousCheckIn = _booking.checkIn;
     final previousCheckOut = _booking.checkOut;
 
     setState(() => _isUpdating = true);
     try {
-      await _bookingService.rescheduleBooking(
+      // total_price is computed server-side from the listing's real
+      // price_per_night, never trusted from the client - see
+      // reschedule_booking() in schema_secure_bookings.sql.
+      final result = await _bookingService.rescheduleBooking(
         bookingId: _booking.id,
         checkIn: newCheckIn,
         checkOut: newCheckOut,
-        totalPrice: newTotal,
-        previousCheckIn: previousCheckIn,
-        previousCheckOut: previousCheckOut,
       );
       if (!mounted) return;
-      final rescheduledAt = DateTime.now();
       setState(() {
         _booking = _booking.copyWith(
-          checkIn: newCheckIn,
-          checkOut: newCheckOut,
-          totalPrice: newTotal,
-          rescheduledAt: rescheduledAt,
+          checkIn: result.checkIn,
+          checkOut: result.checkOut,
+          totalPrice: result.totalPrice,
+          rescheduledAt: result.rescheduledAt,
           previousCheckIn: previousCheckIn,
           previousCheckOut: previousCheckOut,
         );
@@ -915,26 +910,27 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
 
     setState(() => _isUpdating = true);
     try {
-      await _bookingService.cancelBooking(
-        _booking.id,
-        fee: quote.fee,
-        refund: quote.refund,
-      );
+      // fee/refund shown in the dialog above are a preview computed
+      // the same way the server will - cancel_booking() (see
+      // schema_secure_bookings.sql) recomputes them itself from the
+      // listing's actual policy rather than trusting quote.fee/
+      // quote.refund, so what actually gets stored comes back here.
+      final result = await _bookingService.cancelBooking(_booking.id);
       if (!mounted) return;
       setState(() {
         _booking = _booking.copyWith(
           status: 'cancelled',
-          cancellationFee: quote.fee,
-          refundAmount: quote.refund,
-          cancelledAt: DateTime.now(),
+          cancellationFee: result.fee,
+          refundAmount: result.refund,
+          cancelledAt: result.cancelledAt,
         );
         _didChange = true;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            quote.hasFee
-                ? 'Booking cancelled. ₹${quote.refund.toStringAsFixed(0)} will be refunded.'
+            result.fee > 0
+                ? 'Booking cancelled. ₹${result.refund.toStringAsFixed(0)} will be refunded.'
                 : 'Booking cancelled. You\'ll be fully refunded.',
           ),
         ),

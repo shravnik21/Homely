@@ -20,6 +20,38 @@ class BookingConflictException implements Exception {
   String toString() => message;
 }
 
+/// What cancel_booking() actually charged/refunded, computed
+/// server-side (see schema_secure_bookings.sql) - the caller no
+/// longer sends fee/refund, it just reads back what was applied.
+class CancelBookingResult {
+  final num fee;
+  final num refund;
+  final DateTime cancelledAt;
+
+  const CancelBookingResult({
+    required this.fee,
+    required this.refund,
+    required this.cancelledAt,
+  });
+}
+
+/// What reschedule_booking() actually set the new total to,
+/// recomputed server-side from the listing's real price_per_night -
+/// the caller no longer sends totalPrice.
+class RescheduleBookingResult {
+  final DateTime checkIn;
+  final DateTime checkOut;
+  final num totalPrice;
+  final DateTime rescheduledAt;
+
+  const RescheduleBookingResult({
+    required this.checkIn,
+    required this.checkOut,
+    required this.totalPrice,
+    required this.rescheduledAt,
+  });
+}
+
 /// Same service-layer pattern as AuthService/PlacesService - screens
 /// never talk to Supabase directly, they call this instead.
 class BookingService {
@@ -77,51 +109,62 @@ class BookingService {
         .eq('id', bookingId);
   }
 
-  /// Marks a booking as cancelled and records what CancellationPolicy
-  /// charged for it - [fee]/[refund] are computed by the caller
-  /// (CancellationDetailScreen shows the same numbers to the guest
-  /// before they confirm) and stored as-is so they can't drift later.
-  /// RLS only allows a user to update rows where `user_id` matches
-  /// their own id (see schema_bookings.sql), so this can never touch
-  /// someone else's booking even if the id were guessed.
-  Future<void> cancelBooking(
-    String bookingId, {
-    required num fee,
-    required num refund,
-  }) async {
-    await _client.from('bookings').update({
-      'status': 'cancelled',
-      'cancellation_fee': fee,
-      'refund_amount': refund,
-      'cancelled_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', bookingId);
+  /// Marks a booking as cancelled via the cancel_booking() Postgres
+  /// function (see schema_secure_bookings.sql), which recomputes the
+  /// fee/refund itself from the listing's real cancellation policy
+  /// and the booking's real check-in date - a guest can no longer
+  /// just pass in whatever fee/refund numbers they like. The
+  /// function only touches rows where `user_id` matches the caller's
+  /// own id, same guarantee the old direct-update version relied on.
+  /// Returns what was actually applied, for the caller to show/store.
+  Future<CancelBookingResult> cancelBooking(String bookingId) async {
+    try {
+      final row = await _client.rpc(
+        'cancel_booking',
+        params: {'p_booking_id': bookingId},
+      ) as Map<String, dynamic>;
+
+      return CancelBookingResult(
+        fee: (row['cancellation_fee'] as num?) ?? 0,
+        refund: (row['refund_amount'] as num?) ?? 0,
+        cancelledAt: DateTime.parse(row['cancelled_at'] as String),
+      );
+    } catch (e) {
+      _rethrowMapped(e);
+    }
   }
 
-  /// Updates the dates (and recomputed total price) on an existing
-  /// booking, for the "Reschedule" option under Manage booking.
-  /// [previousCheckIn]/[previousCheckOut] are the dates being
-  /// replaced - stored alongside a fresh `rescheduled_at` timestamp
-  /// (see schema_reschedule_tracking.sql) purely so the host
-  /// dashboard's "Booking updates" card can show what changed,
-  /// mirroring how cancelBooking() records cancellation_fee/
-  /// refund_amount for its own card.
-  Future<void> rescheduleBooking({
+  /// Updates the dates on an existing booking via the
+  /// reschedule_booking() Postgres function, for the "Reschedule"
+  /// option under Manage booking. The function recomputes total_price
+  /// itself from the listing's real price_per_night (never trusting
+  /// a client-supplied total) and captures the old dates as
+  /// previous_check_in/out server-side before overwriting them - the
+  /// caller no longer needs to pass either. Still surfaces as a
+  /// BookingConflictException if the new dates overlap someone else's
+  /// stay, exactly as before (schema_no_overlapping_bookings.sql's
+  /// EXCLUDE constraint still applies to the function's own UPDATE).
+  Future<RescheduleBookingResult> rescheduleBooking({
     required String bookingId,
     required DateTime checkIn,
     required DateTime checkOut,
-    required num totalPrice,
-    required DateTime previousCheckIn,
-    required DateTime previousCheckOut,
   }) async {
     try {
-      await _client.from('bookings').update({
-        'check_in': _formatDate(checkIn),
-        'check_out': _formatDate(checkOut),
-        'total_price': totalPrice,
-        'previous_check_in': _formatDate(previousCheckIn),
-        'previous_check_out': _formatDate(previousCheckOut),
-        'rescheduled_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', bookingId);
+      final row = await _client.rpc(
+        'reschedule_booking',
+        params: {
+          'p_booking_id': bookingId,
+          'p_check_in': _formatDate(checkIn),
+          'p_check_out': _formatDate(checkOut),
+        },
+      ) as Map<String, dynamic>;
+
+      return RescheduleBookingResult(
+        checkIn: DateTime.parse(row['check_in'] as String),
+        checkOut: DateTime.parse(row['check_out'] as String),
+        totalPrice: (row['total_price'] as num?) ?? 0,
+        rescheduledAt: DateTime.parse(row['rescheduled_at'] as String),
+      );
     } catch (e) {
       _rethrowMapped(e);
     }
@@ -137,45 +180,11 @@ class BookingService {
     }).eq('id', bookingId);
   }
 
-  /// Inserts the booking row and returns its generated `id`, so the
-  /// caller can show a booking reference on the confirmation screen.
-  Future<String> createBooking({
-    required String placeId,
-    required DateTime checkIn,
-    required DateTime checkOut,
-    required int guests,
-    required num totalPrice,
-  }) async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) {
-      throw Exception('You must be logged in to book a place.');
-    }
-
-    // Dates are sent as 'YYYY-MM-DD' strings - Postgres' `date` column
-    // doesn't need time-of-day, and this avoids timezone mismatches
-    // between the device and the server.
-    // `.select('id').single()` asks PostgREST to hand back the row it
-    // just inserted (instead of the default empty response) so we can
-    // read the new booking's id straight away.
-    try {
-      final row = await _client
-          .from('bookings')
-          .insert({
-            'user_id': userId,
-            'place_id': placeId,
-            'check_in': _formatDate(checkIn),
-            'check_out': _formatDate(checkOut),
-            'guests': guests,
-            'total_price': totalPrice,
-          })
-          .select('id')
-          .single();
-
-      return row['id'] as String;
-    } catch (e) {
-      _rethrowMapped(e);
-    }
-  }
+  // Booking creation itself no longer lives here - `bookings` has no
+  // client-facing insert policy anymore (see
+  // schema_secure_bookings.sql). A booking can now only be created by
+  // PaymentService.verifyAndCreateBooking(), which requires a
+  // verified Razorpay payment signature first. See BookingScreen.
 
   String _formatDate(DateTime date) {
     return '${date.year.toString().padLeft(4, '0')}-'

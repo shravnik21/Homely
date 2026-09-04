@@ -61,4 +61,40 @@ class PaymentService {
 
   String _dateOnly(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Step 2 of 2, called once Razorpay Checkout reports success.
+  /// Sends the three values Checkout hands back - order id, payment
+  /// id, and signature - to verify-and-create-booking, which
+  /// recomputes the signature itself using RAZORPAY_KEY_SECRET (never
+  /// on-device) and only creates the `bookings` row if it matches.
+  ///
+  /// This replaces the old flow where BookingScreen inserted the
+  /// booking directly the moment Checkout's on-device callback fired
+  /// - nothing could actually verify a real payment had happened at
+  /// that point. Returns the new booking's id.
+  Future<String> verifyAndCreateBooking({
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    final response = await _client.functions.invoke(
+      'verify-and-create-booking',
+      body: {
+        'razorpayOrderId': razorpayOrderId,
+        'razorpayPaymentId': razorpayPaymentId,
+        'razorpaySignature': razorpaySignature,
+      },
+    );
+
+    final data = response.data;
+    if (response.status != 200) {
+      final message =
+          (data is Map && data['error'] is String) ? data['error'] as String : null;
+      throw Exception(
+        message ?? 'Payment could not be verified. Contact support if you were charged.',
+      );
+    }
+
+    return (data as Map<String, dynamic>)['bookingId'] as String;
+  }
 }

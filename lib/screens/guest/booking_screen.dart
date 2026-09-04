@@ -125,53 +125,53 @@ class _BookingScreenState extends State<BookingScreen> {
     }
   }
 
-  // Step 2 of 2: payment succeeded - NOW create the actual booking.
+  // Step 2 of 2: payment succeeded on-device - now prove it server-
+  // side and only then create the actual booking.
   //
-  // Trusting this client-side callback to create the booking is
-  // temporary and known-imperfect: nothing here stops a modified
-  // client from firing this handler without ever really paying. The
-  // next step in this feature adds server-side verification via a
-  // Razorpay webhook, which will move booking creation there instead
-  // and make this client-side path redundant rather than
-  // load-bearing. Until then, this is still a real improvement over
-  // before - a booking now can't exist without at least a client-
-  // reported successful payment, where previously it required none.
+  // Checkout's success callback firing is NOT proof of payment on its
+  // own - nothing stops a modified client from firing this handler
+  // without ever really paying. What IS proof is the signature
+  // Razorpay hands back alongside the order/payment ids: it's an
+  // HMAC keyed with RAZORPAY_KEY_SECRET, which never leaves the
+  // server, so only a genuine payment could have produced one that
+  // matches. verify-and-create-booking recomputes it server-side and
+  // only creates the booking if it does - this handler no longer has
+  // the power to create a booking on its own, it just relays what
+  // Checkout gave it.
   Future<void> _onPaymentSuccess(PaymentSuccessResponse response) async {
     try {
-      final bookingId = await _bookingService.createBooking(
-        placeId: widget.place.id,
-        checkIn: _checkIn!,
-        checkOut: _checkOut!,
-        guests: _guests,
-        totalPrice: _total,
+      final bookingId = await _paymentService.verifyAndCreateBooking(
+        razorpayOrderId: response.orderId!,
+        razorpayPaymentId: response.paymentId!,
+        razorpaySignature: response.signature!,
       );
       if (!mounted) return;
       _showSuccessDialog(bookingId);
     } catch (e) {
       if (!mounted) return;
-      // A BookingConflictException means someone else grabbed these
-      // exact dates while payment was in progress - the DB's
-      // no_overlapping_bookings constraint (see
-      // schema_no_overlapping_bookings.sql) is what actually caught
-      // it. Clear the picked dates so the guest can't just tap
-      // "Confirm" again and hit the same wall. Payment has already
-      // gone through at this point - a refund still needs to be
-      // handled (not yet built), so this case is flagged clearly
-      // rather than silently treated like an ordinary booking error.
-      final isConflict = e is BookingConflictException;
+      // A conflict (someone else grabbed these exact dates while
+      // payment was in progress) surfaces as a plain Exception with
+      // this wording from the Edge Function itself - see
+      // verify-and-create-booking's EXCLUSION_VIOLATION_CODE branch.
+      // Checked against the raw exception text (not friendlyError's
+      // output, which collapses anything non-network-related down to
+      // a generic fallback and would never match here). Clear the
+      // picked dates either way so the guest can't just tap "Confirm"
+      // again and hit the same wall.
+      final rawMessage = e.toString();
+      final isConflict = rawMessage.contains('booked by someone else');
       if (isConflict) {
         setState(() {
           _checkIn = null;
           _checkOut = null;
         });
       }
+      final displayMessage = isConflict
+          ? rawMessage.replaceFirst('Exception: ', '')
+          : friendlyError(e, fallback: 'Booking failed after payment. Contact support.');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            isConflict
-                ? '${e.toString()} Your payment went through - contact support for a refund.'
-                : friendlyError(e, fallback: 'Booking failed after payment. Contact support.'),
-          ),
+          content: Text(displayMessage),
           backgroundColor: AppColors.error,
         ),
       );

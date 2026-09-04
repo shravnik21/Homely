@@ -53,7 +53,7 @@ dependencies:
   # wizard's map starts centered somewhere sensible before they drop
   # a pin - uses the OS's own geocoder (Apple/Google on-device), not
   # a separate Google API, so it needs no extra API key.
-  geocoding: ^3.0.0
+  geocoding: ^4.0.0
 
   # Free-text place search on the wizard's map (search-as-you-type,
   # tap a result to jump there) via OpenStreetMap's Nominatim API -

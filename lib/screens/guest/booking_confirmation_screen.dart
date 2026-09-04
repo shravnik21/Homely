@@ -7,7 +7,7 @@ import 'package:homely_app/models/place.dart';
 ///
 /// This screen mirrors the details the user filled in on [BookingScreen]
 /// (place, dates, guests, price) plus the booking reference returned by
-/// [BookingService.createBooking], so the trip has a permanent-feeling
+/// [PaymentService.verifyAndCreateBooking], so the trip has a permanent-feeling
 /// summary the user can screenshot or glance back at before leaving
 /// the flow.
 class BookingConfirmationScreen extends StatelessWidget {

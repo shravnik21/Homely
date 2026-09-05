@@ -6,13 +6,15 @@ import 'package:homely_app/screens/guest/guest_root_screen.dart';
 import 'package:homely_app/screens/host/host_root_screen.dart';
 import 'package:homely_app/screens/host/host_onboarding_screen.dart';
 
-// Minimal splash, back on-brand: solid red (AppColors.primary)
-// background with a subtle depth gradient, rather than the
-// near-black version this replaces. Since the icon is itself a red
+// Minimal splash, on-brand red, now with a richer multi-stop
+// diagonal gradient plus a soft radial highlight behind the content -
+// both animate very slowly so the background feels alive rather than
+// flat, without being distracting. Since the icon is itself a red
 // square, everything around it (glow, ring, progress bar) uses white
-// accents instead of red-on-red so it doesn't disappear into the
-// background.
-const _deepRed = Color(0xFFB8203C); // a shade darker than AppColors.primary
+// accents so it doesn't disappear into the background.
+const _brightCoral = Color(0xFFFF7A8F); // lighter tint, top-left
+const _deepRed = Color(0xFFB8203C); // mid-dark red
+const _deepWine = Color(0xFF5E0E24); // darkest, bottom-right
 
 const _title = 'HOMELY';
 const _tagline = 'FARMHOUSES  •  VILLAS  •  FLATS  •  APARTMENTS';
@@ -33,6 +35,12 @@ class _SplashScreenState extends State<SplashScreen>
   // sliding in, in sequence.
   late final AnimationController _entrance;
 
+  // Repeats, reversing, slowly - drives the background's gentle
+  // gradient drift and the radial highlight's breathing. Separate
+  // from _pulse (which is faster and just for the icon) so the
+  // background moves at its own, slower, ambient pace.
+  late final AnimationController _bgDrift;
+
   // Repeats, reversing - the icon's soft glow breathing.
   late final AnimationController _pulse;
 
@@ -52,6 +60,10 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1900),
     )..repeat(reverse: true);
+    _bgDrift = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 7000),
+    )..repeat(reverse: true);
     _progress = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1300),
@@ -64,6 +76,7 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _entrance.dispose();
     _pulse.dispose();
+    _bgDrift.dispose();
     _progress.dispose();
     super.dispose();
   }
@@ -106,32 +119,73 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppColors.primary, _deepRed],
-          ),
-        ),
-        child: Stack(
-          children: [
-            // A single faint white ring tucked in each far corner -
-            // a quiet geometric accent, same idea as before, just
-            // recoloured for the red background.
-            Positioned(
-              top: -90,
-              right: -90,
-              child: _ring(size: 260, opacity: 0.08),
-            ),
-            Positioned(
-              bottom: -70,
-              left: -70,
-              child: _ring(size: 200, opacity: 0.06),
-            ),
-            Center(child: _content()),
-          ],
-        ),
+      body: AnimatedBuilder(
+        animation: _bgDrift,
+        builder: (context, _) {
+          final t = _bgDrift.value; // 0 -> 1 -> 0, slowly
+
+          return Stack(
+            children: [
+              // Base layer: a rich diagonal gradient across the red
+              // family (light coral -> primary -> deep wine) instead
+              // of a flat two-stop fade. The begin/end points drift a
+              // few percent over ~7s so it reads as alive rather than
+              // static, without being distracting.
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.lerp(
+                        const Alignment(-1.0, -1.0),
+                        const Alignment(-0.7, -1.0),
+                        t,
+                      )!,
+                      end: Alignment.lerp(
+                        const Alignment(1.0, 1.0),
+                        const Alignment(0.7, 1.0),
+                        t,
+                      )!,
+                      colors: const [_brightCoral, AppColors.primary, _deepRed, _deepWine],
+                      stops: const [0.0, 0.38, 0.72, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              // Second layer: a soft radial highlight glowing behind
+              // where the logo sits, breathing gently in sync with
+              // the same slow clock - gives the centre some depth
+              // instead of the gradient alone doing all the work.
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0, -0.15),
+                      radius: 0.85,
+                      colors: [
+                        Colors.white.withOpacity(0.10 + 0.05 * t),
+                        Colors.white.withOpacity(0.0),
+                      ],
+                      stops: const [0.0, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              // A single faint white ring tucked in each far corner -
+              // a quiet geometric accent on top of the gradient.
+              Positioned(
+                top: -90,
+                right: -90,
+                child: _ring(size: 260, opacity: 0.08),
+              ),
+              Positioned(
+                bottom: -70,
+                left: -70,
+                child: _ring(size: 200, opacity: 0.06),
+              ),
+              Center(child: _content()),
+            ],
+          );
+        },
       ),
     );
   }

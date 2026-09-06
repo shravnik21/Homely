@@ -107,7 +107,7 @@ class CancellationPolicy {
         final partialRefundPct =
             (100 - moderatePartialRefundFeeRate * 100).round();
         return [
-          CancellationPolicyTierRow(
+          const CancellationPolicyTierRow(
             rangeLabel:
                 '$moderateFullRefundThresholdDays+ days before check-in',
             outcomeLabel: 'Free cancellation',
@@ -134,7 +134,7 @@ class CancellationPolicy {
             outcomeLabel: '$partialRefundPct% refund',
             good: false,
           ),
-          CancellationPolicyTierRow(
+          const CancellationPolicyTierRow(
             rangeLabel:
                 'Less than $strictPartialRefundThresholdDays days before check-in',
             outcomeLabel: 'No refund',

@@ -79,13 +79,13 @@ class _ListingReviewsScreenState extends State<ListingReviewsScreen> {
                 _buildSummaryHeader(summary),
                 const SizedBox(height: 24),
                 if (reviews.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 32),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
                     child: Text(
                       "No reviews yet. They'll show up here once guests "
                       "complete a stay and leave feedback.",
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppColors.grey, fontSize: 13),
+                      style: TextStyle(color: AppColors.grey, fontSize: 13),
                     ),
                   )
                 else

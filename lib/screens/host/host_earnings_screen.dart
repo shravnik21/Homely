@@ -525,12 +525,12 @@ class _HostEarningsScreenState extends State<HostEarningsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.info_outline_rounded,
+              Icon(Icons.info_outline_rounded,
                   size: 17, color: AppColors.dark),
-              const SizedBox(width: 8),
-              const Text(
+              SizedBox(width: 8),
+              Text(
                 'How your payout is calculated',
                 style: TextStyle(
                     fontSize: 13.5,

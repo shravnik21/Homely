@@ -315,7 +315,7 @@ class _HostNotificationsScreenState extends State<HostNotificationsScreen> {
             Container(
               width: 72,
               height: 72,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.lightGrey,
                 shape: BoxShape.circle,
               ),

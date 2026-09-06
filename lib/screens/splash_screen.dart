@@ -6,19 +6,18 @@ import 'package:homely_app/screens/guest/guest_root_screen.dart';
 import 'package:homely_app/screens/host/host_root_screen.dart';
 import 'package:homely_app/screens/host/host_onboarding_screen.dart';
 
-// Minimal splash, on-brand red, now with a richer multi-stop
-// diagonal gradient plus a soft radial highlight behind the content -
-// both animate very slowly so the background feels alive rather than
-// flat, without being distracting. Since the icon is itself a red
-// square, everything around it (glow, ring, progress bar) uses white
-// accents so it doesn't disappear into the background.
-const _brightCoral = Color(0xFFFF7A8F); // lighter tint, top-left
-const _deepRed = Color(0xFFB8203C); // mid-dark red
-const _deepWine = Color(0xFF5E0E24); // darkest, bottom-right
-
-const _title = 'HOMELY';
-const _tagline = 'FARMHOUSES  •  VILLAS  •  FLATS  •  APARTMENTS';
-const _loadingCaption = 'FINDING YOUR NEXT STAY';
+// White base (kept from the previous minimal pass) with the red
+// decorative language from the Aurix reference layered back in - a
+// soft glow breathing behind the icon, two faint rings in the
+// corners, and a slim sliding progress bar - all re-tinted in the
+// brand red instead of Aurix's orange, and all restrained enough
+// (low opacity, slow motion) to sit quietly on white rather than
+// fight it. Typography stays plain dark/grey, not the loud all-caps
+// treatment - keeps this closer to "white minimal with red accents"
+// than a full reskin back to the dark version.
+const _title = 'Homely';
+const _tagline = 'Farmhouses • Villas • Flats • Apartments';
+const _loadingCaption = 'Finding your next stay';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -31,22 +30,15 @@ class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   final AuthService _authService = AuthService();
 
-  // Plays once - icon, title, tagline, and the progress bar fading/
-  // sliding in, in sequence.
+  // Plays once - icon, title, tagline, progress bar fading/sliding
+  // in, in sequence.
   late final AnimationController _entrance;
 
-  // Repeats, reversing, slowly - drives the background's gentle
-  // gradient drift and the radial highlight's breathing. Separate
-  // from _pulse (which is faster and just for the icon) so the
-  // background moves at its own, slower, ambient pace.
-  late final AnimationController _bgDrift;
-
-  // Repeats, reversing - the icon's soft glow breathing.
+  // Repeats, reversing - the glow behind the icon breathing gently.
   late final AnimationController _pulse;
 
   // Repeats, NOT reversing - the highlight sliding along the
-  // progress track, reset to the start each lap like a typical
-  // indeterminate loading bar.
+  // progress track.
   late final AnimationController _progress;
 
   @override
@@ -54,15 +46,11 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _entrance = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1000),
     )..forward();
     _pulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1900),
-    )..repeat(reverse: true);
-    _bgDrift = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 7000),
     )..repeat(reverse: true);
     _progress = AnimationController(
       vsync: this,
@@ -76,16 +64,11 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _entrance.dispose();
     _pulse.dispose();
-    _bgDrift.dispose();
     _progress.dispose();
     super.dispose();
   }
 
   Future<void> _navigateNext() async {
-    // Longer than before (was 2.4s) - gives the entrance animation
-    // room to fully settle plus a proper beat to actually look at
-    // the finished screen, rather than cutting away right as it
-    // lands.
     await Future.delayed(const Duration(milliseconds: 3300));
     if (!mounted) return;
 
@@ -104,7 +87,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 500),
+        transitionDuration: const Duration(milliseconds: 450),
         pageBuilder: (_, __, ___) => next,
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(
@@ -119,73 +102,24 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: AnimatedBuilder(
-        animation: _bgDrift,
-        builder: (context, _) {
-          final t = _bgDrift.value; // 0 -> 1 -> 0, slowly
-
-          return Stack(
-            children: [
-              // Base layer: a rich diagonal gradient across the red
-              // family (light coral -> primary -> deep wine) instead
-              // of a flat two-stop fade. The begin/end points drift a
-              // few percent over ~7s so it reads as alive rather than
-              // static, without being distracting.
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.lerp(
-                        const Alignment(-1.0, -1.0),
-                        const Alignment(-0.7, -1.0),
-                        t,
-                      )!,
-                      end: Alignment.lerp(
-                        const Alignment(1.0, 1.0),
-                        const Alignment(0.7, 1.0),
-                        t,
-                      )!,
-                      colors: const [_brightCoral, AppColors.primary, _deepRed, _deepWine],
-                      stops: const [0.0, 0.38, 0.72, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-              // Second layer: a soft radial highlight glowing behind
-              // where the logo sits, breathing gently in sync with
-              // the same slow clock - gives the centre some depth
-              // instead of the gradient alone doing all the work.
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: const Alignment(0, -0.15),
-                      radius: 0.85,
-                      colors: [
-                        Colors.white.withOpacity(0.10 + 0.05 * t),
-                        Colors.white.withOpacity(0.0),
-                      ],
-                      stops: const [0.0, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-              // A single faint white ring tucked in each far corner -
-              // a quiet geometric accent on top of the gradient.
-              Positioned(
-                top: -90,
-                right: -90,
-                child: _ring(size: 260, opacity: 0.08),
-              ),
-              Positioned(
-                bottom: -70,
-                left: -70,
-                child: _ring(size: 200, opacity: 0.06),
-              ),
-              Center(child: _content()),
-            ],
-          );
-        },
+      backgroundColor: AppColors.white,
+      body: Stack(
+        children: [
+          // Two faint red rings tucked in the far corners - the same
+          // quiet geometric accent the dark version had, just tinted
+          // for white instead of a dark background.
+          Positioned(
+            top: -90,
+            right: -90,
+            child: _ring(size: 260, opacity: 0.07),
+          ),
+          Positioned(
+            bottom: -70,
+            left: -70,
+            child: _ring(size: 200, opacity: 0.06),
+          ),
+          Center(child: _content()),
+        ],
       ),
     );
   }
@@ -197,7 +131,7 @@ class _SplashScreenState extends State<SplashScreen>
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withOpacity(opacity), width: 1),
+          border: Border.all(color: AppColors.primary.withOpacity(opacity), width: 1),
         ),
       ),
     );
@@ -208,49 +142,47 @@ class _SplashScreenState extends State<SplashScreen>
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _animatedLogo(),
-        const SizedBox(height: 26),
+        const SizedBox(height: 24),
         _fadeSlide(
-          interval: const Interval(0.2, 0.6, curve: Curves.easeOut),
-          offset: 12,
+          interval: const Interval(0.25, 0.75, curve: Curves.easeOut),
+          offset: 8,
           child: const Text(
             _title,
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 30,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 6,
+              color: AppColors.dark,
+              fontSize: 27,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.1,
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
         _fadeSlide(
-          interval: const Interval(0.4, 0.75, curve: Curves.easeOut),
-          offset: 10,
+          interval: const Interval(0.4, 0.9, curve: Curves.easeOut),
+          offset: 6,
           child: const Text(
             _tagline,
             style: TextStyle(
-              color: Colors.white70,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 1.2,
+              color: AppColors.grey,
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
-        const SizedBox(height: 76),
+        const SizedBox(height: 60),
         _fadeSlide(
-          interval: const Interval(0.65, 1.0, curve: Curves.easeOut),
-          offset: 8,
+          interval: const Interval(0.6, 1.0, curve: Curves.easeOut),
+          offset: 6,
           child: Column(
             children: [
               _progressBar(),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               const Text(
                 _loadingCaption,
                 style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.6,
+                  color: AppColors.grey,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
@@ -263,29 +195,29 @@ class _SplashScreenState extends State<SplashScreen>
   Widget _animatedLogo() {
     final entranceCurve = CurvedAnimation(
       parent: _entrance,
-      curve: const Interval(0.0, 0.6, curve: Curves.easeOutBack),
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
     );
 
     return AnimatedBuilder(
       animation: Listenable.merge([_entrance, _pulse]),
       builder: (context, child) {
-        final glowOpacity = 0.28 + 0.18 * _pulse.value;
+        // Soft red glow behind the icon, breathing gently - the
+        // Aurix touch, re-tinted for a white background where a
+        // colored glow reads as a highlight rather than needing to
+        // fight for contrast the way it did on the all-red version.
+        final glowOpacity = 0.16 + 0.10 * _pulse.value;
         return Opacity(
-          opacity: entranceCurve.value.clamp(0.0, 1.0),
+          opacity: entranceCurve.value,
           child: Transform.scale(
-            scale: 0.7 + 0.3 * entranceCurve.value,
+            scale: 0.94 + 0.06 * entranceCurve.value,
             child: Container(
-              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                // White glow, not red-on-red, so it actually reads
-                // as a glow against the red background instead of
-                // disappearing into it.
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.white.withOpacity(glowOpacity),
-                    blurRadius: 46,
-                    spreadRadius: 8,
+                    color: AppColors.primary.withOpacity(glowOpacity),
+                    blurRadius: 40,
+                    spreadRadius: 6,
                   ),
                 ],
               ),
@@ -294,22 +226,13 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         );
       },
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          // A thin white ring around the icon itself - the icon is a
-          // red square, so without this it would blend straight into
-          // an all-red background instead of reading as a badge.
-          border: Border.all(color: Colors.white.withOpacity(0.55), width: 1.5),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22.5),
-          child: Image.asset(
-            'assets/images/app_icon.png',
-            width: 96,
-            height: 96,
-            fit: BoxFit.cover,
-          ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Image.asset(
+          'assets/images/app_icon.png',
+          width: 84,
+          height: 84,
+          fit: BoxFit.cover,
         ),
       ),
     );
@@ -351,7 +274,7 @@ class _SplashScreenState extends State<SplashScreen>
             width: trackWidth,
             height: trackHeight,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.22),
+              color: AppColors.lightGrey,
               borderRadius: BorderRadius.circular(trackHeight / 2),
             ),
           ),
@@ -366,10 +289,7 @@ class _SplashScreenState extends State<SplashScreen>
                   width: highlightWidth,
                   height: trackHeight,
                   decoration: BoxDecoration(
-                    // White highlight against the translucent-white
-                    // track - a red highlight here would read as
-                    // muddy against an all-red page.
-                    color: Colors.white,
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(trackHeight / 2),
                   ),
                 ),

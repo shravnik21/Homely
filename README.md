@@ -2,6 +2,16 @@
 
 Homely is an Airbnb-style booking app for farmhouses, villas, apartments, and holiday homes, built with **Flutter** and **Supabase**. It supports two roles from a single codebase — **Guest** (browse, book, manage trips) and **Host** (list properties, manage bookings, get paid) — chosen at sign-up.
 
+## Contents
+
+- [Features](#features)
+- [Payments & Security](#payments--security)
+- [Reliability & Error Handling](#reliability--error-handling)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Database Schema](#database-schema)
+- [Getting Started](#getting-started)
+
 ## Features
 
 ### Guest Mode
@@ -152,51 +162,12 @@ lib/
 └── main.dart
 
 supabase/
-├── setup.sql                              # profiles table, RLS, auto-create-profile trigger
-├── add_role_column.sql                    # guest/host role on profiles
-├── schema_places.sql                      # cities, places, place_images + RLS
-├── schema_cities_host_insert.sql          # lets a host add a new city on the fly
-├── schema_address_components.sql
-├── schema_fix_places_order.sql
-├── seed_places.sql                        # sample listings across Mumbai, Pune, Goa, Lonavala, Alibaug
-├── schema_place_highlights.sql            # listing highlights row
-├── schema_place_checkin_method.sql        # smart lock / lockbox / in-person, etc.
-├── schema_bookings.sql                    # bookings table + RLS
-├── schema_no_overlapping_bookings.sql     # prevents double-booking the same dates
-├── schema_blocked_dates.sql               # host-blocked calendar dates
-├── schema_place_availability.sql          # booked/blocked-date lookups for the calendar
-├── schema_reschedule_tracking.sql         # previous dates / rescheduled_at columns
-├── schema_cancellation_fee.sql            # cancellation_fee / refund_amount columns
-├── schema_cancellation_policy_type.sql    # per-listing flexible/moderate/strict policy
-├── schema_checked_in.sql
-├── schema_hide_bookings.sql
-├── schema_payment_orders.sql              # Razorpay order tracking (server-authoritative)
-├── schema_secure_bookings.sql             # locks booking writes to the Edge Function + RPCs
-├── schema_secure_profiles.sql             # protects role / id_verification_status from self-escalation
-├── schema_reviews.sql
-├── fix_review_submit_bug.sql
-├── schema_messages.sql                    # booking-scoped chat
-├── schema_message_notifications.sql
-├── schema_notifications.sql
-├── schema_host_notifications.sql
-├── cleanup_duplicate_notifications.sql
-├── schema_wishlists.sql
-├── schema_host_onboarding.sql
-├── schema_host_verification.sql
-├── schema_host_listings.sql
-├── schema_host_bookings.sql               # host_notes on bookings
-├── schema_host_booking_notes.sql
-├── schema_host_public_info.sql            # public host info visible to guests
-├── schema_host_public_info_change_fix.sql
-├── host_public_info_error_fix.sql
-├── schema_split_host_profiles.sql
-├── schema_host_profiles_fk.sql
-├── schema_host_profiles_duplicate_name_email.sql
-├── migrate_split_existing_addresses.sql
 └── functions/
     ├── create-razorpay-order/          # Server-computed Razorpay order creation
     └── verify-and-create-booking/      # Verifies payment signature, then creates the booking
 ```
+
+> SQL migrations for the Postgres schema (tables, RLS policies, triggers) live alongside these functions but are omitted here for brevity — see [Database Schema](#database-schema) below for the full table list.
 
 ## Database Schema
 
@@ -224,7 +195,7 @@ All tables use **Row Level Security**. Listings (`places`, `cities`) are publicl
    ```
 3. **Set up Supabase**
    - Create a project at [supabase.com](https://supabase.com).
-   - Run the SQL files in `supabase/` against your project, in roughly the order listed above (`setup.sql` first, then the feature-specific schema files).
+   - Run the project's SQL migrations against your new project to create the tables, RLS policies, and triggers described in [Database Schema](#database-schema).
 4. **Configure environment variables** — create a `.env` file in the project root (see `.env.example`):
    ```
    SUPABASE_URL=your-supabase-project-url
@@ -243,5 +214,3 @@ All tables use **Row Level Security**. Listings (`places`, `cities`) are publicl
    ```bash
    flutter run
    ```
-
-

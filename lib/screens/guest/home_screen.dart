@@ -43,11 +43,13 @@ class _HomeScreenState extends State<HomeScreen>
   List<Place> _filteredPlaces = [];
   final TextEditingController _searchController = TextEditingController();
 
-  // Pills below the search bar filter by property type. null = "All".
+  // Pills below the search bar filter by property type. Multiple pills
+  // can be active at once - a listing matches if its type is in this
+  // set (OR), or if the set is empty (nothing selected = show all).
   // Built from kPropertyTypes (the same list hosts pick from when
   // creating a listing) so every pill is guaranteed to match real
   // data - see listing_constants.dart for the canonical type list.
-  String? _selectedType;
+  final Set<String> _selectedTypes = {};
 
   @override
   void initState() {
@@ -139,20 +141,28 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _onTypeSelected(String? type) {
     setState(() {
-      // Tapping an already-selected pill deselects it, back to "All".
-      _selectedType = _selectedType == type ? null : type;
+      if (type == null) {
+        // "All" pill clears every other selection.
+        _selectedTypes.clear();
+      } else if (_selectedTypes.contains(type)) {
+        // Tapping an already-selected pill again turns it off.
+        _selectedTypes.remove(type);
+      } else {
+        _selectedTypes.add(type);
+      }
       _applyFilters();
     });
   }
 
-  // Applies both the type pill and the search text together (AND),
-  // so e.g. picking "Villa" then typing "goa" narrows to villas in
-  // Goa rather than either filter replacing the other.
+  // Applies both the type pills and the search text together.
+  // Within types it's OR (Villa or Farmhouse selected shows both);
+  // between the type filter and the search box it's AND, so typing
+  // "goa" while Villa is selected narrows to villas in Goa.
   void _applyFilters() {
     final query = _searchController.text.trim().toLowerCase();
     _filteredPlaces = _allPlaces.where((p) {
-      final matchesType =
-          _selectedType == null || p.type.toLowerCase() == _selectedType;
+      final matchesType = _selectedTypes.isEmpty ||
+          _selectedTypes.contains(p.type.toLowerCase());
       final matchesQuery = query.isEmpty ||
           p.title.toLowerCase().contains(query) ||
           p.cityName.toLowerCase().contains(query) ||
@@ -268,7 +278,11 @@ class _HomeScreenState extends State<HomeScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
         children: [
-          _buildPill(label: 'All', type: null),
+          _buildPill(
+            label: 'All',
+            type: null,
+            isSelected: _selectedTypes.isEmpty,
+          ),
           for (final type in kPropertyTypes)
             Padding(
               padding: const EdgeInsets.only(left: 8),
@@ -279,6 +293,7 @@ class _HomeScreenState extends State<HomeScreen>
                     .map((w) => w[0].toUpperCase() + w.substring(1))
                     .join(' '),
                 type: type,
+                isSelected: _selectedTypes.contains(type),
               ),
             ),
         ],
@@ -286,7 +301,11 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildPill({required String label, required String? type}) {
+  Widget _buildPill({
+    required String label,
+    required String? type,
+    required bool isSelected,
+  }) {
     return GestureDetector(
       onTap: () => _onTypeSelected(type),
       child: ClipRRect(
@@ -295,14 +314,19 @@ class _HomeScreenState extends State<HomeScreen>
           // Frosted-glass effect - subtle blur of whatever sits behind
           // the pill, so it reads as translucent rather than flat white.
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: AppColors.white.withOpacity(0.45),
+              color: isSelected
+                  ? Colors.black.withOpacity(0.85)
+                  : AppColors.white.withOpacity(0.45),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Colors.black.withOpacity(0.25),
+                color: isSelected
+                    ? Colors.black
+                    : Colors.black.withOpacity(0.25),
                 width: 1,
               ),
               boxShadow: [
@@ -316,7 +340,9 @@ class _HomeScreenState extends State<HomeScreen>
             child: Text(
               label,
               style: TextStyle(
-                color: Colors.black.withOpacity(0.85),
+                color: isSelected
+                    ? Colors.white
+                    : Colors.black.withOpacity(0.85),
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),

@@ -144,10 +144,9 @@ class _HomeScreenState extends State<HomeScreen>
       if (type == null) {
         // "All" pill clears every other selection.
         _selectedTypes.clear();
-      } else if (_selectedTypes.contains(type)) {
-        // Tapping an already-selected pill again turns it off.
-        _selectedTypes.remove(type);
       } else {
+        // Tapping a pill selects it. Tapping it again while already
+        // selected does nothing - it stays on; only "All" clears it.
         _selectedTypes.add(type);
       }
       _applyFilters();

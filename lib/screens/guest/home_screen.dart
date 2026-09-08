@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:homely_app/config/app_theme.dart';
 import 'package:homely_app/models/place.dart';
+import 'package:homely_app/screens/host/listing_constants.dart';
 import 'package:homely_app/services/auth_service.dart';
 import 'package:homely_app/services/places_service.dart';
 import 'package:homely_app/services/wishlist_service.dart';
@@ -39,6 +40,12 @@ class _HomeScreenState extends State<HomeScreen>
   List<Place> _allPlaces = [];
   List<Place> _filteredPlaces = [];
   final TextEditingController _searchController = TextEditingController();
+
+  // Pills below the search bar filter by property type. null = "All".
+  // Built from kPropertyTypes (the same list hosts pick from when
+  // creating a listing) so every pill is guaranteed to match real
+  // data - see listing_constants.dart for the canonical type list.
+  String? _selectedType;
 
   @override
   void initState() {
@@ -125,17 +132,32 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _onSearchChanged() {
-    final query = _searchController.text.trim().toLowerCase();
+    setState(() => _applyFilters());
+  }
+
+  void _onTypeSelected(String? type) {
     setState(() {
-      _filteredPlaces = query.isEmpty
-          ? _allPlaces
-          : _allPlaces.where((p) {
-              return p.title.toLowerCase().contains(query) ||
-                  p.cityName.toLowerCase().contains(query) ||
-                  p.address.toLowerCase().contains(query) ||
-                  p.type.toLowerCase().contains(query);
-            }).toList();
+      // Tapping an already-selected pill deselects it, back to "All".
+      _selectedType = _selectedType == type ? null : type;
+      _applyFilters();
     });
+  }
+
+  // Applies both the type pill and the search text together (AND),
+  // so e.g. picking "Villa" then typing "goa" narrows to villas in
+  // Goa rather than either filter replacing the other.
+  void _applyFilters() {
+    final query = _searchController.text.trim().toLowerCase();
+    _filteredPlaces = _allPlaces.where((p) {
+      final matchesType =
+          _selectedType == null || p.type.toLowerCase() == _selectedType;
+      final matchesQuery = query.isEmpty ||
+          p.title.toLowerCase().contains(query) ||
+          p.cityName.toLowerCase().contains(query) ||
+          p.address.toLowerCase().contains(query) ||
+          p.type.toLowerCase().contains(query);
+      return matchesType && matchesQuery;
+    }).toList();
   }
 
   String get _displayName {
@@ -165,6 +187,7 @@ class _HomeScreenState extends State<HomeScreen>
           children: [
             _buildHeader(),
             _buildSearchBar(),
+            _buildTypePills(),
             Expanded(child: _buildPlacesList()),
           ],
         ),
@@ -236,6 +259,54 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildTypePills() {
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        children: [
+          _buildPill(label: 'All', type: null),
+          for (final type in kPropertyTypes)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: _buildPill(
+                // Capitalize each word: 'holiday home' -> 'Holiday Home'
+                label: type
+                    .split(' ')
+                    .map((w) => w[0].toUpperCase() + w.substring(1))
+                    .join(' '),
+                type: type,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPill({required String label, required String? type}) {
+    return GestureDetector(
+      onTap: () => _onTypeSelected(type),
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.black, width: 1),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.black,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPlacesList() {
     return FutureBuilder<List<Place>>(
       future: _placesFuture,
@@ -258,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen>
         final places = snapshot.data ?? [];
         if (_allPlaces.isEmpty && places.isNotEmpty) {
           _allPlaces = places;
-          _filteredPlaces = places;
+          _applyFilters();
         }
 
         if (_filteredPlaces.isEmpty) {

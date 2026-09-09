@@ -214,3 +214,5 @@ All tables use **Row Level Security**. Listings (`places`, `cities`) are publicl
    ```bash
    flutter run
    ```
+
+
